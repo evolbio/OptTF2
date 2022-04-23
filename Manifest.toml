@@ -5,9 +5,9 @@ manifest_format = "2.0"
 
 [[deps.AbstractAlgebra]]
 deps = ["GroupsCore", "InteractiveUtils", "LinearAlgebra", "MacroTools", "Markdown", "Random", "RandomExtensions", "SparseArrays", "Test"]
-git-tree-sha1 = "1e357f8f7a732d7c92def7527431b41ec1857bec"
+git-tree-sha1 = "f4a6ecff7407a29d5d15503508144b7cc81bdc63"
 uuid = "c3fe647b-3220-5bb0-a1ea-a7954cac585d"
-version = "0.25.2"
+version = "0.25.3"
 
 [[deps.AbstractTrees]]
 git-tree-sha1 = "03e0550477d86222521d254b741d470ba17ea0b5"
@@ -1285,9 +1285,9 @@ version = "0.6.0"
 
 [[deps.StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
-git-tree-sha1 = "4f6ec5d99a28e1a749559ef7dd518663c5eca3d5"
+git-tree-sha1 = "cd56bf18ed715e8b09f06ef8c6b781e6cdc49911"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "1.4.3"
+version = "1.4.4"
 
 [[deps.Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -1295,9 +1295,9 @@ uuid = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 
 [[deps.StatsAPI]]
 deps = ["LinearAlgebra"]
-git-tree-sha1 = "8d7530a38dbd2c397be7ddd01a424e4f411dcc41"
+git-tree-sha1 = "c82aaa13b44ea00134f8c9c89819477bd3986ecd"
 uuid = "82ae8749-77ed-4fe6-ae5f-f523153014b0"
-version = "1.2.2"
+version = "1.3.0"
 
 [[deps.StatsBase]]
 deps = ["DataAPI", "DataStructures", "LinearAlgebra", "LogExpFunctions", "Missings", "Printf", "Random", "SortingAlgorithms", "SparseArrays", "Statistics", "StatsAPI"]
@@ -1410,9 +1410,9 @@ version = "0.1.10"
 
 [[deps.TimerOutputs]]
 deps = ["ExprTools", "Printf"]
-git-tree-sha1 = "d60b0c96a16aaa42138d5d38ad386df672cb8bd8"
+git-tree-sha1 = "11db03dd5bbc0d2b57a570d228a0f34538c586b1"
 uuid = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
-version = "0.5.16"
+version = "0.5.17"
 
 [[deps.Tokenize]]
 git-tree-sha1 = "0952c9cee34988092d73a5708780b3917166a0dd"

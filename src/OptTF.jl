@@ -116,23 +116,20 @@ plot_repressilator_phase(sol) =
 			ticks=(5.644:8.644,string.([50,100,200,400]))))
 
 # m message, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
-function parse_p(p,S)
-	m_a, m_d, p_a, p_d = ones(4) 
-end
-
-# MUST FIX THIS AND RELATED FUNCTIONS
-# FIRST ESTABLISH GRAPH FOR RELATIONS BETWEEN TFs and PROMOTER SITES
-# Consider Graphs.jl: random_regular_digraph() and static_scale_free()
-function ode!(du, u, p, t, n, f)
-	f_val = f(calc_v(), a, set_r())
-	du[1:n] .= m_a .* f_val .- m_d .* u[1:n]
-	du[n+1:2n] .= p_a .* u[1:n] .- p_d .* u[n+1:2n]
+function ode_parse_p(p,S)
+	n = S.n
+	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
+	m_a = @view p[ddim+1:ddim+n]
+	m_d = @view p[ddim+n+1:ddim+2n]
+	p_a = @view p[ddim+2n+1:ddim+3n]
+	p_d = @view p[ddim+3n+1:ddim+4n]
+	m_a, m_d, p_a, p_d = p[ddim+n] 
 end
 
 # modified from FitODE.jl
 # m is number of protein dimensions for target pattern
 # n is number of protein dimensions
-# u_init for m proteins taken from target data
+# u_init for proteins taken from target data
 # for ode w/mRNA, u_init for all mRNA and for dummy proteins random or optimized
 # NODE has only proteins
 # TF ODE has n mRNA plus n proteins
@@ -160,9 +157,15 @@ function setup_diffeq_func(S)
 			predict_node_nodummy
 	else
 		dudt = nothing
-		function ode!(du, u, p, t, n, nsqr)
-			s = reshape(p[1:nsqr], n, n)
-			du .= activate.(s*u .- p[nsqr+1:end])
+		# MUST FIX THIS AND RELATED FUNCTIONS
+		# FIRST ESTABLISH GRAPH FOR RELATIONS BETWEEN TFs and PROMOTER SITES
+		# Graphs.random_regular_digraph() sets in # to constant, useful here
+		# alternatively static_scale_free() or static_fitness_model
+		function ode!(du, u, p, t, S, f)
+			m_a, m_d, p_a, p_d = ode_parse_p(p,S)
+			f_val = f(calc_v(), a, set_r())
+			du[1:n] .= m_a .* f_val .- m_d .* u[1:n]			# mRNA level
+			du[n+1:2n] .= p_a .* u[1:n] .- p_d .* u[n+1:2n]		# protein level
 		end
 		predict = S.opt_dummy_u0 ?
 			predict_ode_dummy :
