@@ -59,7 +59,6 @@ end
 # i=1,..,n for protein, j=1,..,m_i for promoter sites for ith gene
 calc_v(y, k, h) = [(y[i]/k[i])^h[i] for i in 1:length(y)]
 set_r(r,n) = vcat(ones(n+1),r)
-num_param(n) = 5*n + n*2^n + n*(2^n-n-1)
 
 # from https://catalyst.sciml.ai/dev/tutorials/using_catalyst/#Mass-Action-ODE-Models
 function generate_repressilator()
@@ -118,13 +117,40 @@ plot_repressilator_phase(sol) =
 # m message, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
 function ode_parse_p(p,S)
 	n = S.n
+	s = S.tf_in_num
+	N = 2^s
 	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
-	m_a = @view p[ddim+1:ddim+n]
-	m_d = @view p[ddim+n+1:ddim+2n]
-	p_a = @view p[ddim+2n+1:ddim+3n]
-	p_d = @view p[ddim+3n+1:ddim+4n]
-	m_a, m_d, p_a, p_d = p[ddim+n] 
+	u0_dum = @view p[1:ddim]				# 2n-m or 0
+	m_a = @view p[ddim+1:ddim+n]			# n
+	m_d = @view p[ddim+n+1:ddim+2n]			# n
+	p_a = @view p[ddim+2n+1:ddim+3n]		# n
+	p_d = @view p[ddim+3n+1:ddim+4n]		# n
+	
+	b = ddim+4n
+	k = [@view p[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
+	b = ddim+4n+n*s
+	h = [@view p[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
+	b = ddim+4n+2*n*s
+	a = [@view p[b+1+(i-1)*N:b+i*N] for i in 1:n]		# nN
+	b = ddim+4n+2*n*s+n*N
+	ri = N - (s+1)
+	r = [@view p[b+1+(i-1)*ri:b+i*ri] for i in 1:n]		# n(N-(s+1))
+	@assert length(p) == b + n*ri
+	# return a named tuple
+	(;u0_dum, m_a, m_d, p_a, p_d, k, h, a, r)
 end
+
+function ode_num_param(S)
+	n = S.n
+	s = S.tf_in_num
+	@assert n >= S.m
+	@assert s <= n
+	N = 2^s
+	ri = N - (s+1)
+	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
+	return ddim+4n+2*n*s+n*N+n*ri
+end
+
 
 # modified from FitODE.jl
 # m is number of protein dimensions for target pattern

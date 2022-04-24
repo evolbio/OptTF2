@@ -51,7 +51,7 @@ train_frac = 1.0	# 1.0 means use all data for training
 n = 5
 m = 3					# repressilator is 3, vary as needed
 
-# with random_regular_digraph, row has not out connections, so initially make
+# with random_regular_digraph, row 1 has no out connections, so initially make
 # matrix of size n+1 then delete first row and column
 # no self connections by this algorithm
 gr_type = 1				# 1 => random, 2 => cycle for use in matching repressilator 
