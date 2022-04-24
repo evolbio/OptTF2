@@ -1,7 +1,6 @@
 module OptTF
 #using OptTF_settings
-using Symbolics, Combinatorics, Catalyst, Parameters, JLD2, Plots, Printf,
-	DifferentialEquations
+using OptTF_data, Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations
 export generate_tf_activation_f, calc_v, set_r, mma
 
 # CODE FOR NODE NOT COMPLETE, USE ODE ONLY UNTIL NODE COMPLETED
@@ -70,60 +69,6 @@ set_r(r,s) = vcat(ones(s+1),r)
 calc_f(f,P,y,S) = 
 	[f(calc_v(getindex(y,S.tf_in[i]),P.k[i],P.h[i]),P.a[i],set_r(P.r[i],S.tf_in_num))
 			for i in 1:S.n]
-
-# from https://catalyst.sciml.ai/dev/tutorials/using_catalyst/#Mass-Action-ODE-Models
-function generate_repressilator()
-	repressilator = @reaction_network Repressilator begin
-		hillr(P₃,α,K,n), ∅ --> m₁
-		hillr(P₁,α,K,n), ∅ --> m₂
-		hillr(P₂,α,K,n), ∅ --> m₃
-		(δ,γ), m₁ <--> ∅
-		(δ,γ), m₂ <--> ∅
-		(δ,γ), m₃ <--> ∅
-		β, m₁ --> m₁ + P₁
-		β, m₂ --> m₂ + P₂
-		β, m₃ --> m₃ + P₃
-		μ, P₁ --> ∅
-		μ, P₂ --> ∅
-		μ, P₃ --> ∅
-	end α K n δ γ β μ
-	@parameters  α K n δ γ β μ
-	@variables t m₁(t) m₂(t) m₃(t) P₁(t) P₂(t) P₃(t)
-	pmap  = (α => .5, K => 40, n => 2, δ => log(2)/120, 
-		      γ => 5e-3, β => 20*log(2)/120, μ => log(2)/60)
-	u₀map = [m₁ => 0., m₂ => 0., m₃ => 0., P₁ => 20., P₂ => 0., P₃ => 0.]
-	
-	odesys = convert(ODESystem, repressilator)
-	save_incr = 10.
-	total_steps = 2000
-	tspan_total = (0., total_steps*save_incr)
-	save_steps = 1000
-	tspan_save = (0., save_steps*save_incr)
-	tsteps_save = 0.:save_incr:save_steps*save_incr
-	oprob = ODEProblem(repressilator, u₀map, tspan_total, pmap)
-	# rows 4:6 are proteins
-	# first 10000 time intervals as warmup, return second period
-	# size is (3,1001) for three proteins at 1001 timepoints
-	# and 1000 save_incr steps
-	# for fitting, probably sufficient to use subset of about 350 pts
-	data = solve(oprob, Tsit5(), saveat=10.)[4:6,total_steps-save_steps:total_steps]
-	u0 = data[:,1]
-	return data, u0, tspan_save, tsteps_save
-end
-
-function plot_repressilator_time(sol; show_all=false)
-	stop = (show_all) ? length(sol[1,:]) : 300
-	display(plot([sol[i,1:stop] for i in 1:3],yscale=:log10))
-end
-
-function plot_repressilator_total(sol)
-	display(plot([sum(sol[:,j]) for j in 1:length(sol[1,:])],yscale=:identity))
-end
-
-plot_repressilator_phase(sol) =
-		display(plot([log2.(Tuple([sol[i,j] for i in 1:3])) for j in 1:length(sol[1,:])],
-			camera=(50,60), linewidth=2, color=mma[1], limits=(5.2,8.8),
-			ticks=(5.644:8.644,string.([50,100,200,400]))))
 
 # m message, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
 function ode_parse_p(p,S)
@@ -251,6 +196,68 @@ function weights(a, tsteps; b=10.0, trunc=S.wt_trunc)
 	vcat(v,v)
 end
 
+function fit_diffeq(S)
+	ode_data, u0, tspan, tsteps, ode_data_orig = FitODE.read_data(S);
+	dudt, ode!, predict = FitODE.setup_diffeq_func(S);
+	
+	# If using subset of data for training then keep original and truncate tsteps
+	tsteps_all = copy(tsteps)
+	tspan_all = tspan
+	if (S.train_frac < 1)
+		tsteps = tsteps[tsteps .<= S.train_frac*tsteps[end]]
+		tspan = (tsteps[begin], tsteps[end])
+	end
+	
+	beta_a = 1:S.wt_incr:S.wt_steps
+	if !S.use_node p_init = 0.1*rand(S.nsqr + S.n) end; # n^2 matrix plus n for individual growth
+	
+	local result
+	for i in 1:length(beta_a)
+		println("Iterate ", i, " of ", length(beta_a))
+		w = weights(S.wt_base^beta_a[i], tsteps; trunc=S.wt_trunc)
+		last_time = tsteps[length(w[1,:])]
+		ts = tsteps[tsteps .<= last_time]
+		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
+		prob = S.use_node ?
+					NeuralODE(dudt, (0.0,last_time), S.solver, saveat = ts, 
+						reltol = S.rtol, abstol = S.atol) :
+					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S.n, S.nsqr), u0,
+						(0.0,last_time), p_init, saveat = ts, reltol = S.rtol, abstol = S.atol)
+		L = loss_args(u0,prob,predict,ode_data,ode_data_orig,tsteps,w)
+		# On first time through loop, set up params p for optimization. Following loop
+		# turns use the parameters returned from sciml_train(), which are in result.u
+		if (i == 1)
+			p = S.use_node ? prob.p : p_init
+			if S.opt_dummy_u0 p = vcat(randn(S.n-2),p) end
+		else
+			p = result.u
+		end
+		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
+						 p, ADAM(S.adm_learn); cb = callback, maxiters=S.max_it)
+	end
+	# To prepare for final fitting and calculations, must set prob to full training
+	# period with tspan and tsteps and then redefine loss_args values in L
+	prob = S.use_node ?
+			NeuralODE(dudt, tspan, S.solver, saveat = tsteps, 
+					reltol = S.rtolR, abstol = S.atolR) :
+			ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S.n, S.nsqr), u0,
+					tspan, p_init, saveat = tsteps, reltol = S.rtolR, abstol = S.atolR)
+	if (S.train_frac == 1.0)
+		prob_all = prob
+	else
+		prob_all = S.use_node ?
+			NeuralODE(dudt, tspan_all, S.solver, saveat = tsteps_all, 
+					reltol = S.rtolR, abstol = S.atolR) :
+			ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S.n, S.nsqr), u0, tspan_all, 
+					p_init, saveat = tsteps_all, reltol = S.rtolR, abstol = S.atolR)
+		
+	end
+	w = ones(2,length(tsteps))
+	L = loss_args(u0,prob,predict,ode_data,ode_data_orig,tsteps,w)
+	A = all_time(prob_all, tsteps_all)
+	p_opt = refine_fit(result.u, S, L)
+	return p_opt, L, A
+end
 
 
 end # module

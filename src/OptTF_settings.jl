@@ -1,5 +1,5 @@
 module OptTF_settings
-using Parameters, DifferentialEquations, Dates, Random, Graphs, SparseArrays
+using OptTF_data, Parameters, DifferentialEquations, Dates, Random, Graphs, SparseArrays
 export Settings, default_ode, default_node, reset_rseed, recalc_settings
 
 default_ode() = Settings()
@@ -41,6 +41,9 @@ end
 
 use_node = false	# switch between NODE and ODE
 layer_size = 20		# size of layers for NODE
+
+# function to generate or load data for fitting
+f_data = generate_repressilator
 
 # fraction of time series to use for training, rest can be used to test prediction
 # truncates training data as train_data[train_data .<= train_frac*train_data[end]]
