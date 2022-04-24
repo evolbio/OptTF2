@@ -1,7 +1,7 @@
 module OptTF
 #using OptTF_settings
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
-	Distributions
+	Distributions, DiffEqFlux, GalacticOptim
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq
 
 # CODE FOR NODE NOT COMPLETE, USE ODE ONLY UNTIL NODE COMPLETED
@@ -37,6 +37,7 @@ make_loss_args_all(L::loss_args, A::all_time) =
 # Use as f=generate_tf_activation_f(s), in which s is number of input TF binding sites
 # in f(v,a,r), lengths v,a,r are s, N, N, augment N-(s+1) for r to N as set_r(r,s)
 # call as f(calc_v(y,k,h), a, set_r(r,s))
+# s is S.tf_in_num
 
 function generate_tf_activation_f(s; print_def=false)
 	N=2^s	# size of powerset
@@ -128,7 +129,7 @@ function setup_diffeq_func(S)
 	  		Array(prob(vcat(u_init,p[1:ddim]), p[ddim+1:end]))
 	predict_node_nodummy(p, prob, u_init) = Array(prob(u_init, p))
 	predict_ode_dummy(p, prob, u_init) =
-			solve(prob, S.solver, u0=vcat(u_init,p[1:ddim_all]), p=p[ddim_all+1:end])
+			solve(prob, S.solver, u0=vcat(p[1:S.n],u_init,p[S.n+1:ddim_all]), p=p[ddim_all+1:end])
 	predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
 
 	# For NODE, many simple options to build alternative network architecture, see SciML docs
@@ -152,8 +153,6 @@ function setup_diffeq_func(S)
 	end
 	return dudt, ode!, predict
 end
-
-#############################################################
 
 function callback(p, loss_val, S, L, pred; doplot = true, show_lines = true)
 	# printing gradient takes calculation time, turn off may yield speedup
@@ -216,6 +215,7 @@ function fit_diffeq(S)
 	
 	beta_a = 1:S.wt_incr:S.wt_steps
 	if !S.use_node p_init = 0.1*rand(ode_num_param(S)) end;
+	f = generate_tf_activation_f(S.tf_in_num)
 
 	local result
 	for i in 1:length(beta_a)
@@ -227,7 +227,7 @@ function fit_diffeq(S)
 		prob = S.use_node ?
 					NeuralODE(dudt, (0.0,last_time), S.solver, saveat = ts, 
 						reltol = S.rtol, abstol = S.atol) :
-					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S.n, S.nsqr), u0,
+					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
 						(0.0,last_time), p_init, saveat = ts, reltol = S.rtol, abstol = S.atol)
 		L = loss_args(u0,prob,predict,data,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
@@ -240,10 +240,14 @@ function fit_diffeq(S)
 		else
 			p = result.u
 		end
+		# alternative: GalacticOptim.AutoForwardDiff() or AutoZygote()
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn); cb = callback, maxiters=S.max_it)
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+						 cb = callback, maxiters=S.max_it)
 	end
 end
+
+#############################################################
 
 function tmp()
 	

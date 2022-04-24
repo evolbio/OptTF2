@@ -47,7 +47,7 @@ f_data = generate_repressilator
 
 # fraction of time series to use for training, rest can be used to test prediction
 # truncates training data as train_data[train_data .<= train_frac*train_data[end]]
-train_frac = 1.0	# 1.0 means use all data for training
+train_frac = 1.0		# 1.0 means use all data for training
 
 # n => number of variables in NODE, for ODE n is # proteins w/n matching mRNA, for 2n
 # m is number of variables in target data, n>=m, with n-m number of dummy dimensions
@@ -64,7 +64,7 @@ graph = gr_type == 2 ?
 	SparseArrays.sparse(random_regular_digraph(n+1,tf_in_num,dir=:in))[2:end,2:end]
 tf_in = [findall(>(0),graph[:,i]) for i in 1:length(graph[1,:])]
 
-opt_dummy_u0 = false	# optimize dummy init values instead of using rand values
+opt_dummy_u0 = true	# optimize dummy init values instead of using rand values
 
 # Larger tolerances are faster but errors make gradient descent more challenging
 # However, fit is sensitive to tolerances, seems NODE may benefit from fluctuations
