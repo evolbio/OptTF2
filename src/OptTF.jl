@@ -1,7 +1,8 @@
 module OptTF
 #using OptTF_settings
-using OptTF_data, Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations
-export generate_tf_activation_f, calc_v, set_r, mma
+using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
+	Distributions
+export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq
 
 # CODE FOR NODE NOT COMPLETE, USE ODE ONLY UNTIL NODE COMPLETED
 
@@ -154,7 +155,7 @@ end
 
 #############################################################
 
-function callback(p, loss_val, S, L, pred; doplot = true, show_lines = false)
+function callback(p, loss_val, S, L, pred; doplot = true, show_lines = true)
 	# printing gradient takes calculation time, turn off may yield speedup
 	if (S.print_grad)
 		grad = gradient(p->loss(p,S,L)[1], p)[1]
@@ -166,13 +167,14 @@ function callback(p, loss_val, S, L, pred; doplot = true, show_lines = false)
 	if doplot
 		# plot current prediction against data
 		len = length(pred[1,:])
+		dim = length(pred[:,1])
 		ts = L.tsteps[1:len]
-		plt = plot(size=(600,800), layout=(2,1))
+		plt = plot(size=(600,400*dim), layout=(dim,1))
 		plot_type! = if show_lines plot! else scatter! end
-		plot_type!(ts, L.ode_data[1,1:len], label = "hare", subplot=1)
-		plot_type!(plt, ts, pred[1,:], label = "pred", subplot=1)
-		plot_type!(ts, L.ode_data[2,1:len], label = "lynx", subplot=2)
-		plot_type!(plt, ts, pred[2,:], label = "pred", subplot=2)
+		for i in 1:dim
+			plot_type!(ts, L.data[i,1:len], label = "", color=mma[1], subplot=i)
+			plot_type!(plt, ts, pred[i,:], label = "", color=mma[2], subplot=i)
+		end
 		display(plot(plt))
   	end
   	return false
@@ -180,25 +182,29 @@ end
 
 function loss(p, S, L)
 	pred_all = L.predict(p, L.prob, L.u0)
-	pred = pred_all[1:2,:]	# First rows are hare & lynx, others dummies
+	pred = S.use_node ? pred_all[1:S.m,:] : pred_all[S.n+1:S.n+S.m]	# proteins
 	pred_length = length(pred[1,:])
 	if pred_length != length(L.w[1,:]) println("Mismatch") end
-	loss = sum(abs2, L.w[:,1:pred_length] .* (L.ode_data[:,1:pred_length] .- pred))
-	return loss, S, L, pred_all
+	loss = sum(abs2, L.w[:,1:pred_length] .* (L.data[:,1:pred_length] .- pred))
+	return loss, S, L, pred
 end
 
 calc_gradient(p,S,L) = gradient(p->loss(p,S,L)[1], p)[1]
 
 # For iterative fitting of times series
-function weights(a, tsteps; b=10.0, trunc=S.wt_trunc) 
+function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc) 
 	w = [1 - cdf(Beta(a,b),x/tsteps[end]) for x = tsteps]
 	v = w[w .> trunc]'
-	vcat(v,v)
+	vv = copy(v)
+	for i in 2:S.m
+		vv = vcat(vv,v)
+	end
+	return vv
 end
 
 function fit_diffeq(S)
-	ode_data, u0, tspan, tsteps, ode_data_orig = FitODE.read_data(S);
-	dudt, ode!, predict = FitODE.setup_diffeq_func(S);
+	data, u0, tspan, tsteps = S.f_data();
+	dudt, ode!, predict = setup_diffeq_func(S);
 	
 	# If using subset of data for training then keep original and truncate tsteps
 	tsteps_all = copy(tsteps)
@@ -209,12 +215,12 @@ function fit_diffeq(S)
 	end
 	
 	beta_a = 1:S.wt_incr:S.wt_steps
-	if !S.use_node p_init = 0.1*rand(S.nsqr + S.n) end; # n^2 matrix plus n for individual growth
-	
+	if !S.use_node p_init = 0.1*rand(ode_num_param(S)) end;
+
 	local result
 	for i in 1:length(beta_a)
 		println("Iterate ", i, " of ", length(beta_a))
-		w = weights(S.wt_base^beta_a[i], tsteps; trunc=S.wt_trunc)
+		w = weights(S.wt_base^beta_a[i], tsteps, S)
 		last_time = tsteps[length(w[1,:])]
 		ts = tsteps[tsteps .<= last_time]
 		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
@@ -223,18 +229,24 @@ function fit_diffeq(S)
 						reltol = S.rtol, abstol = S.atol) :
 					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S.n, S.nsqr), u0,
 						(0.0,last_time), p_init, saveat = ts, reltol = S.rtol, abstol = S.atol)
-		L = loss_args(u0,prob,predict,ode_data,ode_data_orig,tsteps,w)
+		L = loss_args(u0,prob,predict,data,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i == 1)
 			p = S.use_node ? prob.p : p_init
-			if S.opt_dummy_u0 p = vcat(randn(S.n-2),p) end
+			if S.opt_dummy_u0
+				p = S.use_node ? vcat(rand(S.n-S.m),p) : vcat(rand(2S.n-S.m),p)
+			end
 		else
 			p = result.u
 		end
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
 						 p, ADAM(S.adm_learn); cb = callback, maxiters=S.max_it)
 	end
+end
+
+function tmp()
+	
 	# To prepare for final fitting and calculations, must set prob to full training
 	# period with tspan and tsteps and then redefine loss_args values in L
 	prob = S.use_node ?

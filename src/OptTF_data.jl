@@ -1,5 +1,5 @@
 module OptTF_data
-using Catalyst
+using Catalyst, DifferentialEquations, Plots
 export generate_repressilator
 
 # from https://catalyst.sciml.ai/dev/tutorials/using_catalyst/#Mass-Action-ODE-Models
