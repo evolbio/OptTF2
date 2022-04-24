@@ -4,6 +4,8 @@ using Symbolics, Combinatorics, Catalyst, Parameters, JLD2, Plots, Printf,
 	DifferentialEquations
 export generate_tf_activation_f, calc_v, set_r, mma
 
+# CODE FOR NODE NOT COMPLETE, USE ODE ONLY UNTIL NODE COMPLETED
+
 ####################################################################
 # colors, see MMAColors.jl in my private modules
 
@@ -32,15 +34,15 @@ make_loss_args_all(L::loss_args, A::all_time) =
 					w=ones(length(L.data[:,1]),length(L.data[1,:])))
 
 # Generate function to calculate promoter activation following eq S6 of Marbach10_SI.pdf
-# Use as f=generate_tf_activation_f(n)
-# in f(v,a,r), lengths v,a,r are n, N, N, augment N-(n+1) for r to N as set_r(r,n)
-# call as f(calc_v(y,k,h), a, set_r(r,n))
+# Use as f=generate_tf_activation_f(s), in which s is number of input TF binding sites
+# in f(v,a,r), lengths v,a,r are s, N, N, augment N-(s+1) for r to N as set_r(r,s)
+# call as f(calc_v(y,k,h), a, set_r(r,s))
 
-function generate_tf_activation_f(n; print_def=false)
-	N=2^n	# size of powerset
-	@variables v[1:n], a[1:N], r[1:N]	# r is rho for cooperativity weighting
-	# first n+1 terms are not cross products, no cooperativity
-	rr = vcat(ones(n+1),collect(r[n+2:N]))
+function generate_tf_activation_f(s; print_def=false)
+	N=2^s	# size of powerset
+	@variables v[1:s], a[1:N], r[1:N]	# r is rho for cooperativity weighting
+	# first s+1 terms are not cross products, no cooperativity
+	rr = vcat(ones(s+1),collect(r[s+2:N]))
 	vs = collect(powerset(v))		# all possible combinations of binding on
 	vs[1] = [1.0]					# empty set => 1.0 weighting
 	numer = sum([a[i]*rr[i]*prod(vs[i]) for i in 1:N])
@@ -50,15 +52,24 @@ function generate_tf_activation_f(n; print_def=false)
 		println("numer = ", numer)
 		println("denom = ", denom)
 	end
-	# in call, lengths v,a,r are n, N, N-(n+1), with r augmented to N as vcat(ones(n+1),r)
+	# in call, lengths v,a,r are n, N, N-(s+1), with r augmented to N as vcat(ones(s+1),r)
 	f_expr = build_function(to_compute, v, a, r)
 	return eval(f_expr)
 end
 
 # y is tf concentration, k is dissociation constant, h is hill coefficient
-# i=1,..,n for protein, j=1,..,m_i for promoter sites for ith gene
-calc_v(y, k, h) = [(y[i]/k[i])^h[i] for i in 1:length(y)]
-set_r(r,n) = vcat(ones(n+1),r)
+# need to select y values for input indices for ith gene as getindex(y,S.tf_in[i])
+# for full array of concentrations, y, and particular gene i
+# so call for ith gene is with S.tf_in_num tf inputs at promoter as
+# calc_v(getindex(y,S.tf_in[i]),P.k[i],P.h[i])
+calc_v(y, k, h) = [(y[j]/k[j])^h[j] for j in 1:length(h)]
+set_r(r,s) = vcat(ones(s+1),r)
+
+# get full array of f values, for f=generate_tf_activation_f(S.tf_in_num) and
+# P = ode_parse_p(p,S) and y as full array of TF concentrations, S as settings
+calc_f(f,P,y,S) = 
+	[f(calc_v(getindex(y,S.tf_in[i]),P.k[i],P.h[i]),P.a[i],set_r(P.r[i],S.tf_in_num))
+			for i in 1:S.n]
 
 # from https://catalyst.sciml.ai/dev/tutorials/using_catalyst/#Mass-Action-ODE-Models
 function generate_repressilator()
@@ -183,15 +194,11 @@ function setup_diffeq_func(S)
 			predict_node_nodummy
 	else
 		dudt = nothing
-		# MUST FIX THIS AND RELATED FUNCTIONS
-		# FIRST ESTABLISH GRAPH FOR RELATIONS BETWEEN TFs and PROMOTER SITES
-		# Graphs.random_regular_digraph() sets in # to constant, useful here
-		# alternatively static_scale_free() or static_fitness_model
 		function ode!(du, u, p, t, S, f)
-			m_a, m_d, p_a, p_d = ode_parse_p(p,S)
-			f_val = f(calc_v(), a, set_r())
-			du[1:n] .= m_a .* f_val .- m_d .* u[1:n]			# mRNA level
-			du[n+1:2n] .= p_a .* u[1:n] .- p_d .* u[n+1:2n]		# protein level
+			P = ode_parse_p(p,S)
+			f_val = calc_f(f,P,u,S)
+			du[1:n] .= P.m_a .* f_val .- P.m_d .* u[1:n]			# mRNA level
+			du[n+1:2n] .= P.p_a .* u[1:n] .- P.p_d .* u[n+1:2n]		# protein level
 		end
 		predict = S.opt_dummy_u0 ?
 			predict_ode_dummy :
