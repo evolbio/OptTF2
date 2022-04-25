@@ -64,7 +64,7 @@ graph = gr_type == 2 ?
 	SparseArrays.sparse(random_regular_digraph(n+1,tf_in_num,dir=:in))[2:end,2:end]
 tf_in = [findall(>(0),graph[:,i]) for i in 1:length(graph[1,:])]
 
-opt_dummy_u0 = true	# optimize dummy init values instead of using rand values
+opt_dummy_u0 = false	# optimize dummy init values instead of using rand values
 
 # Larger tolerances are faster but errors make gradient descent more challenging
 # However, fit is sensitive to tolerances, seems NODE may benefit from fluctuations

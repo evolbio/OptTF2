@@ -54,7 +54,9 @@ function generate_tf_activation_f(s; print_def=false)
 		println("denom = ", denom)
 	end
 	# in call, lengths v,a,r are n, N, N-(s+1), with r augmented to N as vcat(ones(s+1),r)
-	f_expr = build_function(to_compute, v, a, r)
+	# expression=Val{false} means compiled function returned instead of symbols
+	#   required otherwise cannot use in ode! call
+	f_expr = build_function(to_compute, v, a, r; expression=Val{false})
 	return eval(f_expr)
 end
 
@@ -142,10 +144,13 @@ function setup_diffeq_func(S)
 	else
 		dudt = nothing
 		function ode!(du, u, p, t, S, f)
+			n = S.n
+			u_tf = @view u[1:n]
+			u_pr = @view u[n+1:2n]
 			P = ode_parse_p(p,S)
-			f_val = calc_f(f,P,u,S)
-			du[1:n] .= P.m_a .* f_val .- P.m_d .* u[1:n]			# mRNA level
-			du[n+1:2n] .= P.p_a .* u[1:n] .- P.p_d .* u[n+1:2n]		# protein level
+			f_val = calc_f(f,P,u_pr,S)
+			du[1:n] .= P.m_a .* f_val .- P.m_d .* u_tf			# mRNA level
+			du[n+1:2n] .= P.p_a .* u_tf .- P.p_d .* u_pr		# protein level
 		end
 		predict = S.opt_dummy_u0 ?
 			predict_ode_dummy :
@@ -202,7 +207,7 @@ function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc)
 end
 
 function fit_diffeq(S)
-	data, u0, tspan, tsteps = S.f_data();
+	data, u0, tspan, tsteps = S.f_data(S);
 	dudt, ode!, predict = setup_diffeq_func(S);
 	
 	# If using subset of data for training then keep original and truncate tsteps
@@ -240,10 +245,11 @@ function fit_diffeq(S)
 		else
 			p = result.u
 		end
-		# alternative: GalacticOptim.AutoForwardDiff() or AutoZygote()
-		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
-						 cb = callback, maxiters=S.max_it)
+		print(loss(p,S,L)[1])
+		# alternative: GalacticOptim.AutoForwardDiff() or GalacticOptim.AutoZygote()
+# 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
+# 						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+# 						 cb = callback, maxiters=S.max_it)
 	end
 end
 

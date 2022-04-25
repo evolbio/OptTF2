@@ -3,7 +3,7 @@ using Catalyst, DifferentialEquations, Plots
 export generate_repressilator
 
 # from https://catalyst.sciml.ai/dev/tutorials/using_catalyst/#Mass-Action-ODE-Models
-function generate_repressilator()
+function generate_repressilator(S)
 	repressilator = @reaction_network Repressilator begin
 		hillr(P₃,α,K,n), ∅ --> m₁
 		hillr(P₁,α,K,n), ∅ --> m₂
@@ -39,6 +39,11 @@ function generate_repressilator()
 	# for fitting, probably sufficient to use subset of about 350 pts
 	data = solve(oprob, Tsit5(), saveat=10.)[4:6,total_steps-save_steps:total_steps]
 	u0 = data[:,1]
+	if (S.opt_dummy_u0 == false)
+		u0 = S.use_node ?
+			vcat(u0,rand(S.n-S.m)) :
+			vcat(rand(S.n),u0,rand(S.n-S.m))
+	end
 	return data, u0, tspan_save, tsteps_save
 end
 
