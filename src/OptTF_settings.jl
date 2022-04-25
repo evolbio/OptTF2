@@ -77,7 +77,7 @@ adm_learn = 0.0005	# Adam rate, >=0.0002 for Tsit5, >=0.0005 for TRBDF2, change 
 max_it = 200		# max iterates for each incremental learning step
 					# try 200 for ODE, small tolerances, and Rodas4P solver
 					# and 500 for NODE, with larger tolerances and TRBDF2
-print_grad = true	# show gradient on terminal, requires significant overhead
+print_grad = false	# show gradient on terminal, requires significant overhead
 
 start_time = Dates.format(now(),"yyyymmdd_HHMMSS")
 proj_dir = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF"

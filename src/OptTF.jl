@@ -166,7 +166,7 @@ function callback(p, loss_val, S, L, pred; doplot = true, show_lines = true)
 		gnorm = sqrt(sum(abs2, grad))
 		println(@sprintf("%5.3e; %5.3e", loss_val, gnorm))
 	else
-		display(loss_val)
+		println(@sprintf("%5.3e", loss_val))
 	end
 	if doplot
 		# plot current prediction against data
@@ -186,7 +186,8 @@ end
 
 function loss(p, S, L)
 	pred_all = L.predict(p, L.prob, L.u0)
-	pred = S.use_node ? pred_all[1:S.m,:] : pred_all[S.n+1:S.n+S.m]	# proteins
+	# pick out tracked proteins
+	pred = if S.use_node @view pred_all[1:S.m,:] else @view pred_all[S.n+1:S.n+S.m,:] end
 	pred_length = length(pred[1,:])
 	if pred_length != length(L.w[1,:]) println("Mismatch") end
 	loss = sum(abs2, L.w[:,1:pred_length] .* (L.data[:,1:pred_length] .- pred))
@@ -221,6 +222,7 @@ function fit_diffeq(S)
 	beta_a = 1:S.wt_incr:S.wt_steps
 	if !S.use_node p_init = 0.1*rand(ode_num_param(S)) end;
 	f = generate_tf_activation_f(S.tf_in_num)
+	num_var = S.use_node ? S.n : 2S.n
 
 	local result
 	for i in 1:length(beta_a)
@@ -245,11 +247,15 @@ function fit_diffeq(S)
 		else
 			p = result.u
 		end
-		print(loss(p,S,L)[1])
-		# alternative: GalacticOptim.AutoForwardDiff() or GalacticOptim.AutoZygote()
-# 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-# 						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
-# 						 cb = callback, maxiters=S.max_it)
+		# see https://galacticoptim.sciml.ai/stable/API/optimization_function for
+		# alternative optimization functions, use GalacticOptim. prefix\
+		# common choices AutoZygote() and AutoForwardDiff()
+		# for constraints on variables, must use AutoForwardDiff(),
+		# but may be better to constrain parameters rather than variables
+		# to maintain more realistic model
+		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+						 cb = callback, maxiters=S.max_it)
 	end
 end
 
