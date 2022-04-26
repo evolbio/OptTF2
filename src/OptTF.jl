@@ -74,28 +74,34 @@ calc_f(f,P,y,S) =
 	[f(calc_v(getindex(y,S.tf_in[i]),P.k[i],P.h[i]),P.a[i],set_r(P.r[i],S.tf_in_num))
 			for i in 1:S.n]
 
-# m message, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
+# m message, p protein, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
 function ode_parse_p(p,S)
 	n = S.n
 	s = S.tf_in_num
 	N = 2^s
+	pp = sigmoid.(p)	# most parameters are positive, this normalizes on [0,1]
 	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
-	u0_dum = @view p[1:ddim]				# 2n-m or 0
-	m_a = @view p[ddim+1:ddim+n]			# n
-	m_d = @view p[ddim+n+1:ddim+2n]			# n
-	p_a = @view p[ddim+2n+1:ddim+3n]		# n
-	p_d = @view p[ddim+3n+1:ddim+4n]		# n
+	@. pp[1:ddim] *= 1e6					# [0,1e6] for dummy init concentration
+	u0_dum = @view pp[1:ddim]				# 2n-m or 0
+	@. pp[ddim+1:ddim+4n] *= 1e3			# [0,1e3] for production & decay rates
+	m_a = @view pp[ddim+1:ddim+n]			# n
+	m_d = @view pp[ddim+n+1:ddim+2n]		# n
+	p_a = @view pp[ddim+2n+1:ddim+3n]		# n
+	p_d = @view pp[ddim+3n+1:ddim+4n]		# n
 	
 	b = ddim+4n
-	k = [@view p[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
+	@. pp[ddim+4n+1:ddim+4n+n*s] *= 1e4					# [0,1e4] for dissociation coeff
+	k = [@view pp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
 	b = ddim+4n+n*s
-	h = [@view p[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
+	@. pp[ddim+4n+n*s+1:ddim+4n+2*n*s] *= 1e1			# [0,1e1] for hill coeff
+	h = [@view pp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
 	b = ddim+4n+2*n*s
-	a = [@view p[b+1+(i-1)*N:b+i*N] for i in 1:n]		# nN
+	a = [@view pp[b+1+(i-1)*N:b+i*N] for i in 1:n]		# nN, [0,1] for TF activation
 	b = ddim+4n+2*n*s+n*N
 	ri = N - (s+1)
-	r = [@view p[b+1+(i-1)*ri:b+i*ri] for i in 1:n]		# n(N-(s+1))
-	@assert length(p) == b + n*ri
+	@. pp[ddim+4n+2*n*s+n*N+1:b + n*ri] *= 1e2			# [0,1e2] for cooperativity
+	r = [@view pp[b+1+(i-1)*ri:b+i*ri] for i in 1:n]	# n(N-(s+1))
+	@assert length(pp) == b + n*ri
 	# return a named tuple
 	(;u0_dum, m_a, m_d, p_a, p_d, k, h, a, r)
 end
@@ -110,7 +116,6 @@ function ode_num_param(S)
 	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
 	return ddim+4n+2*n*s+n*N+n*ri
 end
-
 
 # modified from FitODE.jl
 # m is number of protein dimensions for target pattern
@@ -128,10 +133,11 @@ function setup_diffeq_func(S)
 	# If optimizing initial conditions for dummy dimensions, then for initial condition u0,
 	# dummy dimensions are first entries of p
 	predict_node_dummy(p, prob, u_init) =
-	  		Array(prob(vcat(u_init,p[1:ddim]), p[ddim+1:end]))
+	  		Array(prob(vcat(u_init,1e6*sigmoid.(p[1:ddim])), p[ddim+1:end]))
 	predict_node_nodummy(p, prob, u_init) = Array(prob(u_init, p))
 	predict_ode_dummy(p, prob, u_init) =
-			solve(prob, S.solver, u0=vcat(p[1:S.n],u_init,p[S.n+1:ddim_all]), p=p[ddim_all+1:end])
+			solve(prob, S.solver, u0=vcat(1e6*sigmoid.(p[1:S.n]),
+					u_init,1e6*sigmoid.(p[S.n+1:ddim_all])), p=p[ddim_all+1:end])
 	predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
 
 	# For NODE, many simple options to build alternative network architecture, see SciML docs
@@ -220,7 +226,7 @@ function fit_diffeq(S)
 	end
 	
 	beta_a = 1:S.wt_incr:S.wt_steps
-	if !S.use_node p_init = 0.1*rand(ode_num_param(S)) end;
+	if !S.use_node p_init = randn(ode_num_param(S)) end;
 	f = generate_tf_activation_f(S.tf_in_num)
 	num_var = S.use_node ? S.n : 2S.n
 
@@ -242,7 +248,7 @@ function fit_diffeq(S)
 		if (i == 1)
 			p = S.use_node ? prob.p : p_init
 			if S.opt_dummy_u0
-				p = S.use_node ? vcat(rand(S.n-S.m),p) : vcat(rand(2S.n-S.m),p)
+				p = S.use_node ? vcat(randn(S.n-S.m),p) : vcat(randn(2S.n-S.m),p)
 			end
 		else
 			p = result.u
