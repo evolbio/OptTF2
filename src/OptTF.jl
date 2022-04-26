@@ -90,20 +90,81 @@ function ode_parse_p(p,S)
 	p_d = @view pp[ddim+3n+1:ddim+4n]		# n
 	
 	b = ddim+4n
-	@. pp[ddim+4n+1:ddim+4n+n*s] *= 1e4					# [0,1e4] for dissociation coeff
+	@. pp[b+1:b+n*s] *= 1e4								# [0,1e4] for dissociation coeff
 	k = [@view pp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
 	b = ddim+4n+n*s
-	@. pp[ddim+4n+n*s+1:ddim+4n+2*n*s] *= 1e1			# [0,1e1] for hill coeff
+	@. pp[b+1:b+n*s] *= 5e0								# [0,5e0] for hill coeff
 	h = [@view pp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
 	b = ddim+4n+2*n*s
 	a = [@view pp[b+1+(i-1)*N:b+i*N] for i in 1:n]		# nN, [0,1] for TF activation
 	b = ddim+4n+2*n*s+n*N
 	ri = N - (s+1)
-	@. pp[ddim+4n+2*n*s+n*N+1:b + n*ri] *= 1e2			# [0,1e2] for cooperativity
+	@. pp[b+1:b + n*ri] *= 1e1							# [0,1e1] for cooperativity
 	r = [@view pp[b+1+(i-1)*ri:b+i*ri] for i in 1:n]	# n(N-(s+1))
 	@assert length(pp) == b + n*ri
 	# return a named tuple
 	(;u0_dum, m_a, m_d, p_a, p_d, k, h, a, r)
+end
+
+# Because parameters are transformed by sigmoid function, must invert that function to set
+# values, ie, to get a parameter value of m, must invert m = k/(1+e^-p), in which k is the 
+# multiplier used to make parameter range = [0,k]. Inverting yields parameter value p
+function inverse_sigmoid(m, k)
+	@assert k >= m
+	@assert m >= 0
+	log(m/(k-m))
+end
+
+# Goal is to setup near equilibrium matching u0 for tracked proteins, dummy proteins set at
+# equilibrium value of first tracked protein, u0[1], and all mRNAs at 0.1 times protein level
+# use a = 1 for all a values, so that activation f is 0.5
+# Yields p_a=10, p_d=m_d=1, m_a=0.2 u, for which u is target initial value of protein
+function init_ode_param(u0,S)
+	@assert length(u0) == S.m
+	num_p = ode_num_param(S)
+	p = zeros(num_p)
+	n = S.n
+	m = S.m
+	s = S.tf_in_num
+	N = 2^s
+	ddim = S.opt_dummy_u0 ? 2*n - m : 0
+	if S.opt_dummy_u0
+		p[n-m+1:n] .= 0.1 .* u0[1:m]					# mRNA matching m tracked proteins
+		if n > m
+			p[1:n-m] .= u0[1] .* ones(n-m)				# n-m dummy proteins set to u0[1]
+			p[n+1:2n-m] .= 0.1 .* u0[1] .* ones(n-m)	# n-m dummy mRNA
+		end
+		# invert to get parameter values to match targets
+		p[1:ddim] .= [inverse_sigmoid(p[i],1e6) for i in 1:ddim]
+	end
+	pp[ddim+1:ddim+m] .= 0.2 .* u0[1:m]			# m_a
+	if (n>m) pp[ddim+m+1:ddim+n] .= (0.2 * u0[1]) .* ones(n-m) end
+	pp[ddim+n+1:ddim+2n] .= ones(n)				# m_d
+	pp[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)	# p_a
+	pp[ddim+3n+1:ddim+4n] .= ones(n)			# p_d
+	
+	p[ddim+1:ddim+4n] .= [inverse_sigmoid(p[i],1e3) for i in ddim+1:ddim+4n]
+	
+	b = ddim+4n
+	p[b+1:b+n*s] .= 1e2 .* ones(n*s)			# k
+	p[b+1:b+n*s] .= [inverse_sigmoid(p[i],1e4) for i in b+1:b+n*s]
+	
+	b = ddim+4n+n*s
+	p[b+1:b+*n*s] .= ones(n*s)					# h
+	p[b+1:b+*n*s] .= [inverse_sigmoid(p[i],5e0) for i in b+1:b+*n*s]
+	
+	b = ddim+4n+2n*s
+	p[b+1:b+n*N] .= 0.5 .* ones(n*s)			# a
+	p[b+1:b+n*N] .= [inverse_sigmoid(p[i],1e0) for i in b+1:b+n*N]
+	
+	b = ddim+4n+2*n*s+n*N
+	p[b+1:b+n*N] .= ones(n*s)					# r
+	p[b+1:b+n*N] .= [inverse_sigmoid(p[i],1e1) for i in b+1:b+n*N]
+	
+	@assert (b+n*N) == num_p
+	# Add small amount of noise
+	p .= p .* (1.0 .+ 0.01*randn(num_p))
+	return p
 end
 
 function ode_num_param(S)
