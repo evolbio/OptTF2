@@ -292,7 +292,7 @@ function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc)
 	return vv
 end
 
-function fit_diffeq(S)
+function fit_diffeq(S; noise=0.05)
 	data, u0, tspan, tsteps = S.f_data(S);
 	dudt, ode!, predict = setup_diffeq_func(S);
 	
@@ -305,7 +305,7 @@ function fit_diffeq(S)
 	end
 	
 	beta_a = 1:S.wt_incr:S.wt_steps
-	if !S.use_node p_init = init_ode_param(u0,S; noise=0.0) end;
+	if !S.use_node p_init = init_ode_param(u0,S; noise=noise) end;
 	f = generate_tf_activation_f(S.tf_in_num)
 	num_var = S.use_node ? S.n : 2S.n
 
@@ -340,7 +340,7 @@ function fit_diffeq(S)
 		# but may be better to constrain parameters rather than variables
 		# to maintain more realistic model
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
 						 cb = callback, maxiters=S.max_it)
 	end
 end
