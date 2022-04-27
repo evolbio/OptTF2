@@ -1,7 +1,7 @@
 module OptTF
 #using OptTF_settings
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
-	Distributions, DiffEqFlux, GalacticOptim
+	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq
 
 # CODE FOR NODE NOT COMPLETE, USE ODE ONLY UNTIL NODE COMPLETED
@@ -241,7 +241,7 @@ function callback(p, loss_val, S, L, pred; doplot = true, show_lines = true)
 		len = length(pred[1,:])
 		dim = length(pred[:,1])
 		ts = L.tsteps[1:len]
-		plt = plot(size=(600,400*dim), layout=(dim,1))
+		plt = plot(size=(600,400*dim), layout=(dim,1),left_margin=12px)
 		plot_type! = if show_lines plot! else scatter! end
 		for i in 1:dim
 			plot_type!(ts, L.data[i,1:len], label = "", color=mma[1], subplot=i)
@@ -262,6 +262,7 @@ function loss(p, S, L)
 	return loss, S, L, pred
 end
 
+# this uses zygote, which seems to be very slow, consider ForwardDiff
 calc_gradient(p,S,L) = gradient(p->loss(p,S,L)[1], p)[1]
 
 # For iterative fitting of times series
