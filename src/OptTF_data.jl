@@ -40,9 +40,14 @@ function generate_repressilator(S)
 	data = solve(oprob, Tsit5(), saveat=10.)[4:6,total_steps-save_steps:total_steps]
 	u0 = data[:,1]
 	if (S.opt_dummy_u0 == false)
+		prot_dum = u0[1].*ones(S.n-S.m)
+		prot_init = vcat(u0,prot_dum)
+		mRNA_init = 0.1 .* prot_init
 		u0 = S.use_node ?
-			vcat(u0,rand(S.n-S.m)) :
-			vcat(rand(S.n),u0,rand(S.n-S.m))
+			# vcat(u0,rand(S.n-S.m)) :					# random init
+			# vcat(rand(S.n),u0,rand(S.n-S.m))
+			prot_init : 
+			vcat(mRNA_init,prot_init)					# see OptTF.init_ode_param
 	end
 	return data, u0, tspan_save, tsteps_save
 end

@@ -103,7 +103,23 @@ function ode_parse_p(p,S)
 	r = [@view pp[b+1+(i-1)*ri:b+i*ri] for i in 1:n]	# n(N-(s+1))
 	@assert length(pp) == b + n*ri
 	# return a named tuple
-	(;u0_dum, m_a, m_d, p_a, p_d, k, h, a, r)
+	(;u0_dum, m_a, m_d, p_a, p_d, k, h, a, r)			# return named tuple
+end
+
+test_range(x, top) = @assert minimum(x) >= 0 && maximum(x) <= top
+
+function test_param(p,S)
+	P = ode_parse_p(p,S)
+	if length(P.u0_dum) > 0 test_range(P.u0_dum, 1e6) end
+	test_range(P.m_a,1e3)
+	test_range(P.m_d,1e3)
+	test_range(P.p_a,1e3)
+	test_range(P.p_d,1e3)
+	test_range(P.p_d,1e3)
+	test_range(minimum(P.k),1e4)	# need min of min for array of arrays
+	test_range(minimum(P.h),5e0)
+	test_range(minimum(P.a),1e0)
+	test_range(minimum(P.r),1e1)
 end
 
 # Because parameters are transformed by sigmoid function, must invert that function to set
@@ -120,7 +136,7 @@ end
 # use a = 1 for all a values, so that activation f is 0.5
 # Yields p_a=10, p_d=m_d=1, m_a=0.2 u, for which u is target initial value of protein
 function init_ode_param(u0,S; noise=2e-3)
-	@assert length(u0) == S.m
+	@assert length(u0) == (S.opt_dummy_u0 ? S.m : 2S.n)
 	num_p = ode_num_param(S)
 	p = zeros(num_p)
 	n = S.n
@@ -129,16 +145,16 @@ function init_ode_param(u0,S; noise=2e-3)
 	N = 2^s
 	ddim = S.opt_dummy_u0 ? 2*n - m : 0
 	if S.opt_dummy_u0
-		p[n-m+1:n] .= 0.1 .* u0[1:m]					# mRNA matching m tracked proteins
+		p[n-m+1:n] .= 0.1 .* u0[1:m]					# mRNA for m tracked proteins, 0.1*u0
 		if n > m
 			p[1:n-m] .= u0[1] .* ones(n-m)				# n-m dummy proteins set to u0[1]
-			p[n+1:2n-m] .= 0.1 .* u0[1] .* ones(n-m)	# n-m dummy mRNA
+			p[n+1:2n-m] .= 0.1 .* u0[1] .* ones(n-m)	# n-m dummy mRNA, 0.1*u0[1]
 		end
 		# invert to get parameter values to match targets
 		p[1:ddim] .= [inverse_sigmoid(p[i],1e6) for i in 1:ddim]
 	end
-	p[ddim+1:ddim+m] .= 0.2 .* u0[1:m]			# m_a
-	if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[1]) .* ones(n-m) end
+	p[ddim+1:ddim+m] .= 2.0 .* u0[1:m]			# m_a
+	if (n>m) p[ddim+m+1:ddim+n] .= (2.0 * u0[1]) .* ones(n-m) end
 	p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
 	p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
 	p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d
@@ -289,7 +305,7 @@ function fit_diffeq(S)
 	end
 	
 	beta_a = 1:S.wt_incr:S.wt_steps
-	if !S.use_node p_init = randn(ode_num_param(S)) end;
+	if !S.use_node p_init = init_ode_param(u0,S; noise=0.0) end;
 	f = generate_tf_activation_f(S.tf_in_num)
 	num_var = S.use_node ? S.n : 2S.n
 
@@ -315,6 +331,7 @@ function fit_diffeq(S)
 			end
 		else
 			p = result.u
+			test_param(p,S)		# check that params are within bounds
 		end
 		# see https://galacticoptim.sciml.ai/stable/API/optimization_function for
 		# alternative optimization functions, use GalacticOptim. prefix\
