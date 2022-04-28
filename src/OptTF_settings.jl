@@ -2,7 +2,7 @@ module OptTF_settings
 using OptTF_data, Parameters, DifferentialEquations, Dates, Random, Graphs, SparseArrays
 export Settings, default_ode, default_node, reset_rseed, recalc_settings
 
-default_ode() = Settings(n=5, tf_in_num=3, rtol=1e-4, atol=1e-6, adm_learn=0.05, train_frac=0.5)
+default_ode() = Settings(n=5, tf_in_num=4, rtol=1e-4, atol=1e-6, adm_learn=0.05, train_frac=0.5)
 default_node() = Settings(use_node=true, rtol=1e-3, atol=1e-4, rtolR=1e-6, atolR=1e-8,
 						max_it=500, solver = TRBDF2())
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
@@ -16,9 +16,10 @@ end
 
 # fix calculated settings, in case one setting changes must propagate to others
 function recalc_settings(S)
+	tmp = (S.tf_in_num == S.n-1) ? 1 : 2	# first row used only when tf_in_num == n-1
 	graph = S.gr_type == 2 ?
-		SparseArrays.sparse(cycle_digraph(S.n)) :
-		SparseArrays.sparse(random_regular_digraph(S.n+1,S.tf_in_num,dir=:in))[2:end,2:end]
+		SparseArrays.sparse(cycle_digraph(n)) :
+		SparseArrays.sparse(random_regular_digraph(S.n+1,S.tf_in_num,dir=:in))[tmp:end,tmp:end]
 	tf_in = [findall(>(0),graph[:,i]) for i in 1:length(graph[1,:])]
 	
 	S = Settings(S; start_time = Dates.format(now(),"yyyymmdd_HHMMSS"),
@@ -58,11 +59,12 @@ m = 3					# repressilator is 3, vary as needed
 # matrix of size n+1 then delete first row and column
 # no self connections by this algorithm
 gr_type = 1				# 1 => random, 2 => cycle for use in matching repressilator 
-tf_in_num = 3			# should be <= n-1 if self avoided, <= if w/self
+tf_in_num = 4			# should be <= n-1 if self avoided, <= if w/self
 @assert tf_in_num < n "tf_in_num ($tf_in_num) should be less than n ($n)"
+tmp = (tf_in_num == n-1) ? 1 : 2	# first row used only when tf_in_num == n-1
 graph = gr_type == 2 ?
 	SparseArrays.sparse(cycle_digraph(n)) :
-	SparseArrays.sparse(random_regular_digraph(n+1,tf_in_num,dir=:in))[2:end,2:end]
+	SparseArrays.sparse(random_regular_digraph(n+1,tf_in_num,dir=:in))[tmp:end,tmp:end]
 tf_in = [findall(>(0),graph[:,i]) for i in 1:length(graph[1,:])]
 
 opt_dummy_u0 = false	# optimize dummy init values instead of using rand values

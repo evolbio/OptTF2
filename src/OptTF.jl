@@ -72,7 +72,8 @@ end
 # for full array of concentrations, y, and particular gene i
 # so call for ith gene is with S.tf_in_num tf inputs at promoter as
 # calc_v(getindex(y,S.tf_in[i]),P.k[i],P.h[i])
-calc_v(y, k, h) = [(y[j]/k[j])^h[j] for j in 1:length(h)]
+calc_vv(y, k, h) = [(y[j]/k[j])^h[j] for j in 1:length(h)]
+calc_v(y, k, h) = begin println(length(y), " ", length(k), " ", length(h)); [(y[j]/k[j])^h[j] for j in 1:length(h)] end
 set_r(r,s) = vcat(ones(s+1),r)
 
 # get full array of f values, for f=generate_tf_activation_f(S.tf_in_num) and
