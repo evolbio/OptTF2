@@ -2,7 +2,7 @@ module OptTF_settings
 using OptTF_data, Parameters, DifferentialEquations, Dates, Random, Graphs, SparseArrays
 export Settings, default_ode, default_node, reset_rseed, recalc_settings
 
-default_ode() = Settings(n=3, rtol=1e-3, atol=1e-4, adm_learn=0.05)
+default_ode() = Settings(n=5, tf_in_num=3, rtol=1e-4, atol=1e-6, adm_learn=0.05, train_frac=0.5)
 default_node() = Settings(use_node=true, rtol=1e-3, atol=1e-4, rtolR=1e-6, atolR=1e-8,
 						max_it=500, solver = TRBDF2())
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
@@ -58,7 +58,7 @@ m = 3					# repressilator is 3, vary as needed
 # matrix of size n+1 then delete first row and column
 # no self connections by this algorithm
 gr_type = 1				# 1 => random, 2 => cycle for use in matching repressilator 
-tf_in_num = 2			# should be <= n-1 if self avoided, <= if w/self
+tf_in_num = 3			# should be <= n-1 if self avoided, <= if w/self
 @assert tf_in_num < n "tf_in_num ($tf_in_num) should be less than n ($n)"
 graph = gr_type == 2 ?
 	SparseArrays.sparse(cycle_digraph(n)) :

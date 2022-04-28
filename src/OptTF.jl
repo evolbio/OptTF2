@@ -6,6 +6,13 @@ export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq
 
 # CODE FOR NODE NOT COMPLETE, USE ODE ONLY UNTIL NODE COMPLETED
 
+# Variables may go negative, which throws error. Could add bounds
+# to constrain optimization. But for now sufficient just to rerun
+# with lower noise for parameters, or lower tolerances for solver
+# in settings (atol and rtol) or perhaps a different solver. Might
+# be that negative values only arise through numerical error of 
+# diffeq solver, so more precision can possibly prevent this issue
+
 ####################################################################
 # colors, see MMAColors.jl in my private modules
 
@@ -84,6 +91,8 @@ function ode_parse_p(p,S)
 	@. pp[1:ddim] *= 1e6					# [0,1e6] for dummy init concentration
 	u0_dum = @view pp[1:ddim]				# 2n-m or 0
 	@. pp[ddim+1:ddim+4n] *= 1e3			# [0,1e3] for production & decay rates
+	# would need to fix inverse calculation also for setting lower bound other than 0
+	#@. pp[ddim+1:ddim+4n] += 1e-1			# [1e-1,1e2+1e-1] for production & decay rates
 	m_a = @view pp[ddim+1:ddim+n]			# n
 	m_d = @view pp[ddim+n+1:ddim+2n]		# n
 	p_a = @view pp[ddim+2n+1:ddim+3n]		# n
@@ -114,7 +123,6 @@ function test_param(p,S)
 	test_range(P.m_a,1e3)
 	test_range(P.m_d,1e3)
 	test_range(P.p_a,1e3)
-	test_range(P.p_d,1e3)
 	test_range(P.p_d,1e3)
 	test_range(minimum(P.k),1e4)	# need min of min for array of arrays
 	test_range(minimum(P.h),5e0)
@@ -243,7 +251,8 @@ function setup_diffeq_func(S)
 	return dudt, ode!, predict
 end
 
-function callback(p, loss_val, S, L, pred; doplot = true, show_lines = true)
+function callback(p, loss_val, S, L, pred_all;
+						doplot = true, show_all = true, show_lines = true)
 	# printing gradient takes calculation time, turn off may yield speedup
 	if (S.print_grad)
 		grad = gradient(p->loss(p,S,L)[1], p)[1]
@@ -253,15 +262,39 @@ function callback(p, loss_val, S, L, pred; doplot = true, show_lines = true)
 		println(@sprintf("%5.3e", loss_val))
 	end
 	if doplot
-		# plot current prediction against data
-		len = length(pred[1,:])
-		dim = length(pred[:,1])
+		len = length(pred_all[1,:])
 		ts = L.tsteps[1:len]
-		plt = plot(size=(600,400*dim), layout=(dim,1),left_margin=12px)
 		plot_type! = if show_lines plot! else scatter! end
-		for i in 1:dim
-			plot_type!(ts, L.data[i,1:len], label = "", color=mma[1], subplot=i)
-			plot_type!(plt, ts, pred[i,:], label = "", color=mma[2], subplot=i)
+		if !show_all
+			# plot current prediction against data, show only target proteins
+			pred = if S.use_node @view pred_all[1:S.m,:] else @view pred_all[S.n+1:S.n+S.m,:] end
+			dim = length(pred[:,1])
+			plt = plot(size=(600,400*dim), layout=(dim,1),left_margin=12px)
+			for i in 1:dim
+				plot_type!(ts, L.data[i,1:len], label = "", color=mma[1], subplot=i)
+				plot_type!(plt, ts, pred[i,:], label = "", color=mma[2], subplot=i)
+			end
+		elseif S.use_node	# NODE and show_all, NOT TESTED YET
+			dim = length(pred_all[:,1])
+			plt = plot(size=(600,250*dim), layout=(dim,1),left_margin=12px)
+			for i in 1:dim
+				# proteins only, no mRNA in NODE
+				if (i <= S.m) # target data
+					plot_type!(ts, L.data[i:len], label = "", color=mma[1], subplot=i)
+				end
+				plot_type!(plt, ts, pred_all[i,:], label = "", color=mma[2], subplot=i)
+			end			
+		else				# ODE and show_all
+			dim = length(pred_all[:,1])
+			plt = plot(size=(1200,250*(dim ÷ 2)), layout=((dim ÷ 2),2),left_margin=12px)
+			for i in 1:dim
+				# proteins [S.n+1:2S.n] on left, mRNA [1:S.n] on right
+				idx = vcat(2:2:dim,1:2:dim) 	# subplot index [2,4,6,...,1,3,5,...]
+				if (i > S.n && i <= (S.n + S.m)) # target data
+					plot_type!(ts, L.data[i-S.n,1:len], label = "", color=mma[1], subplot=idx[i])
+				end
+				plot_type!(plt, ts, pred_all[i,:], label = "", color=mma[2], subplot=idx[i])
+			end			
 		end
 		display(plot(plt))
   	end
@@ -275,7 +308,7 @@ function loss(p, S, L)
 	pred_length = length(pred[1,:])
 	if pred_length != length(L.w[1,:]) println("Mismatch") end
 	loss = sum(abs2, L.w[:,1:pred_length] .* (L.data[:,1:pred_length] .- pred))
-	return loss, S, L, pred
+	return loss, S, L, pred_all
 end
 
 # this uses zygote, which seems to be very slow, consider ForwardDiff
@@ -334,13 +367,15 @@ function fit_diffeq(S; noise=0.05)
 			test_param(p,S)		# check that params are within bounds
 		end
 		# see https://galacticoptim.sciml.ai/stable/API/optimization_function for
-		# alternative optimization functions, use GalacticOptim. prefix\
+		# alternative optimization functions, use GalacticOptim. prefix
 		# common choices AutoZygote() and AutoForwardDiff()
+		# Zygote may fail depending on variety of issues that might be fixed
+		# ForwardDiff more reliable but may be slower
 		# for constraints on variables, must use AutoForwardDiff(),
 		# but may be better to constrain parameters rather than variables
 		# to maintain more realistic model
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
 						 cb = callback, maxiters=S.max_it)
 	end
 end
