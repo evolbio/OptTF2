@@ -26,6 +26,7 @@ mma = [RGB(0.3684,0.50678,0.7098),RGB(0.8807,0.61104,0.14204),
 	prob				# problem to send to solve
 	predict				# function that calls correct solve to make prediction
 	data				# target data
+	data_diff			# first time differences for slopes at each point
 	tsteps				# time steps for training data
 	w					# weights for sequential fitting of time series
 end
@@ -72,8 +73,10 @@ end
 # for full array of concentrations, y, and particular gene i
 # so call for ith gene is with S.tf_in_num tf inputs at promoter as
 # calc_v(getindex(y,S.tf_in[i]),P.k[i],P.h[i])
-calc_vv(y, k, h) = [(y[j]/k[j])^h[j] for j in 1:length(h)]
-calc_v(y, k, h) = begin println(length(y), " ", length(k), " ", length(h)); [(y[j]/k[j])^h[j] for j in 1:length(h)] end
+
+# calc_vv(y, k, h) = begin println(length(y), " ", length(k), " ", length(h)); [(y[j]/k[j])^h[j] for j in 1:length(h)] end
+
+calc_v(y, k, h) = [(y[j]/k[j])^h[j] for j in 1:length(h)]
 set_r(r,s) = vcat(ones(s+1),r)
 
 # get full array of f values, for f=generate_tf_activation_f(S.tf_in_num) and
@@ -308,7 +311,13 @@ function loss(p, S, L)
 	pred = if S.use_node @view pred_all[1:S.m,:] else @view pred_all[S.n+1:S.n+S.m,:] end
 	pred_length = length(pred[1,:])
 	if pred_length != length(L.w[1,:]) println("Mismatch") end
+	# add cost for concentrations over 1e3
 	loss = sum(abs2, L.w[:,1:pred_length] .* (L.data[:,1:pred_length] .- pred))
+	# add loss amount for differences in slopes by first diffs
+	pred_diff = pred[:,2:end] - pred[:,1:end-1]
+	loss_diff = sum(abs2, L.w[:,1:pred_length-1] .*
+						(L.data_diff[:,1:pred_length-1] .- pred_diff[:,1:pred_length-1]))
+	loss = loss + loss_diff + loss*loss_diff
 	return loss, S, L, pred_all
 end
 
@@ -327,7 +336,7 @@ function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc)
 end
 
 function fit_diffeq(S; noise=0.05)
-	data, u0, tspan, tsteps = S.f_data(S);
+	data, data_diff, u0, tspan, tsteps = S.f_data(S);
 	dudt, ode!, predict = setup_diffeq_func(S);
 	
 	# If using subset of data for training then keep original and truncate tsteps
@@ -355,7 +364,7 @@ function fit_diffeq(S; noise=0.05)
 						reltol = S.rtol, abstol = S.atol) :
 					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
 						(0.0,last_time), p_init, saveat = ts, reltol = S.rtol, abstol = S.atol)
-		L = loss_args(u0,prob,predict,data,tsteps,w)
+		L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i == 1)
@@ -367,6 +376,14 @@ function fit_diffeq(S; noise=0.05)
 			p = result.u
 			test_param(p,S)		# check that params are within bounds
 		end
+		
+		# use to look at plot of initial conditions, set to false for normal use
+		if false
+			loss_v, _, _, pred_all = loss(p,S,L)
+			callback(p, loss_v, S, L, pred_all)
+			return ode_parse_p(p,S)
+		end
+		
 		# see https://galacticoptim.sciml.ai/stable/API/optimization_function for
 		# alternative optimization functions, use GalacticOptim. prefix
 		# common choices AutoZygote() and AutoForwardDiff()
@@ -377,6 +394,7 @@ function fit_diffeq(S; noise=0.05)
 		# to maintain more realistic model
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
 						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+						 lb=zeros(num_var), ub=1e3 .* ones(num_var),	# requires ForwardDiff
 						 cb = callback, maxiters=S.max_it)
 	end
 end

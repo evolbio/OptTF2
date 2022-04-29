@@ -38,6 +38,8 @@ function generate_repressilator(S)
 	# and 1000 save_incr steps
 	# for fitting, probably sufficient to use subset of about 350 pts
 	data = solve(oprob, Tsit5(), saveat=10.)[4:6,total_steps-save_steps:total_steps]
+	# make matrix of first diffs for use in loss function
+	data_diff = data[:,2:end] - data[:,1:end-1]
 	u0 = data[:,1]
 	if (S.opt_dummy_u0 == false)
 		prot_dum = u0[1].*ones(S.n-S.m)
@@ -49,7 +51,7 @@ function generate_repressilator(S)
 			prot_init : 
 			vcat(mRNA_init,prot_init)					# see OptTF.init_ode_param
 	end
-	return data, u0, tspan_save, tsteps_save
+	return data, data_diff, u0, tspan_save, tsteps_save
 end
 
 function plot_repressilator_time(sol; show_all=false)
