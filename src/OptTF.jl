@@ -86,40 +86,6 @@ calc_f(f,P,y,S) =
 			for i in 1:S.n]
 
 # m message, p protein, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
-function ode_parse_p_OLD(p,S)
-	n = S.n
-	s = S.tf_in_num
-	N = 2^s
-	pp = sigmoid.(p)	# most parameters are positive, this normalizes on [0,1]
-	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
-	@. pp[1:ddim] *= 1e3					# [0,1e6] for dummy init concentration
-	u0_dum = @view pp[1:ddim]				# 2n-m or 0
-	@. pp[ddim+1:ddim+4n] *= 1e2			# [0,1e3] for production & decay rates
-	# would need to fix inverse calculation also for setting lower bound other than 0
-	#@. pp[ddim+1:ddim+4n] += 1e-1			# [1e-1,1e2+1e-1] for production & decay rates
-	m_a = @view pp[ddim+1:ddim+n]			# n
-	m_d = @view pp[ddim+n+1:ddim+2n]		# n
-	p_a = @view pp[ddim+2n+1:ddim+3n]		# n
-	p_d = @view pp[ddim+3n+1:ddim+4n]		# n
-	
-	b = ddim+4n
-	@. pp[b+1:b+n*s] *= 1e4								# [0,1e4] for dissociation coeff
-	k = [@view pp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
-	b = ddim+4n+n*s
-	@. pp[b+1:b+n*s] *= 5e0								# [0,5e0] for hill coeff
-	h = [@view pp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
-	b = ddim+4n+2*n*s
-	a = [@view pp[b+1+(i-1)*N:b+i*N] for i in 1:n]		# nN, [0,1] for TF activation
-	b = ddim+4n+2*n*s+n*N
-	ri = N - (s+1)
-	@. pp[b+1:b + n*ri] *= 1e1							# [0,1e1] for cooperativity
-	r = [@view pp[b+1+(i-1)*ri:b+i*ri] for i in 1:n]	# n(N-(s+1))
-	@assert length(pp) == b + n*ri
-	# return a named tuple
-	(;u0_dum, m_a, m_d, p_a, p_d, k, h, a, r)			# return named tuple
-end
-
-# m message, p protein, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
 function ode_parse_p(p,S)
 	n = S.n
 	s = S.tf_in_num
@@ -128,12 +94,15 @@ function ode_parse_p(p,S)
 	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
 	# length and max vals for u0_dum, rates, k, h, a, r
 	p_dim = [ddim,4n,n*s,n*s,n*N,n*(N-(s+1))]
-	p_max = [1e3,1e2,1e4,5e0,1e0,1e1]
+	p_max = [1e3,1e2, 1e4,5e0,1e0,1e1]
+	p_min = zeros(length(p))
+	p_min[ddim+1:ddim+4n] = 0.1 .* ones(4n)
 	p_mult = []
 	for i in 1:length(p_dim)
 		append!(p_mult, p_max[i] .* ones(p_dim[i]))
 	end
-	ppp = pp .* p_mult
+	# set min on rates m_a, m_d, p_a, p_d, causes top to be 1e2 + 1e-1
+	ppp = (pp .* p_mult) .+ p_min
 	u0_dum = @view ppp[1:ddim]
 	m_a = @view ppp[ddim+1:ddim+n]			# n
 	m_d = @view ppp[ddim+n+1:ddim+2n]		# n
@@ -155,14 +124,15 @@ function ode_parse_p(p,S)
 end
 
 test_range(x, top) = @assert minimum(x) >= 0 && maximum(x) <= top
+test_range(x, top, offset) = @assert minimum(x) >= offset && maximum(x) <= top+offset
 
 function test_param(p,S)
 	P = ode_parse_p(p,S)
 	if length(P.u0_dum) > 0 test_range(P.u0_dum, 1e3) end
-	test_range(P.m_a,1e2)
-	test_range(P.m_d,1e2)
-	test_range(P.p_a,1e2)
-	test_range(P.p_d,1e2)
+	test_range(P.m_a,1e2,0.1)
+	test_range(P.m_d,1e2,0.1)
+	test_range(P.p_a,1e2,0.1)
+	test_range(P.p_d,1e2,0.1)
 	test_range(minimum(P.k),1e4)	# need min of min for array of arrays
 	test_range(minimum(P.h),5e0)
 	test_range(minimum(P.a),1e0)
@@ -427,12 +397,11 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		# Zygote may fail depending on variety of issues that might be fixed
 		# ForwardDiff more reliable but may be slower
 		
-		# For constraints on variables, must use AutoForwardDiff(),
-		# but may be better to constrain parameters rather than variables
-		# to maintain more realistic model
+		# For constraints on variables, must use AutoForwardDiff() and add
+		# lb=zeros(num_var), ub=1e3 .* ones(num_var),
+		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
 						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
-						 #lb=zeros(num_var), ub=1e3 .* ones(num_var),	# requires ForwardDiff
 						 cb = callback, maxiters=S.max_it)
 	end
 end
