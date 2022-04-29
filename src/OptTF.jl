@@ -86,15 +86,15 @@ calc_f(f,P,y,S) =
 			for i in 1:S.n]
 
 # m message, p protein, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
-function ode_parse_p(p,S)
+function ode_parse_p_OLD(p,S)
 	n = S.n
 	s = S.tf_in_num
 	N = 2^s
 	pp = sigmoid.(p)	# most parameters are positive, this normalizes on [0,1]
 	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
-	@. pp[1:ddim] *= 1e6					# [0,1e6] for dummy init concentration
+	@. pp[1:ddim] *= 1e3					# [0,1e6] for dummy init concentration
 	u0_dum = @view pp[1:ddim]				# 2n-m or 0
-	@. pp[ddim+1:ddim+4n] *= 1e3			# [0,1e3] for production & decay rates
+	@. pp[ddim+1:ddim+4n] *= 1e2			# [0,1e3] for production & decay rates
 	# would need to fix inverse calculation also for setting lower bound other than 0
 	#@. pp[ddim+1:ddim+4n] += 1e-1			# [1e-1,1e2+1e-1] for production & decay rates
 	m_a = @view pp[ddim+1:ddim+n]			# n
@@ -119,15 +119,50 @@ function ode_parse_p(p,S)
 	(;u0_dum, m_a, m_d, p_a, p_d, k, h, a, r)			# return named tuple
 end
 
+# m message, p protein, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
+function ode_parse_p(p,S)
+	n = S.n
+	s = S.tf_in_num
+	N = 2^s
+	pp = sigmoid.(p)	# most parameters are positive, this normalizes on [0,1]
+	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
+	# length and max vals for u0_dum, rates, k, h, a, r
+	p_dim = [ddim,4n,n*s,n*s,n*N,n*(N-(s+1))]
+	p_max = [1e3,1e2,1e4,5e0,1e0,1e1]
+	p_mult = []
+	for i in 1:length(p_dim)
+		append!(p_mult, p_max[i] .* ones(p_dim[i]))
+	end
+	ppp = pp .* p_mult
+	u0_dum = @view ppp[1:ddim]
+	m_a = @view ppp[ddim+1:ddim+n]			# n
+	m_d = @view ppp[ddim+n+1:ddim+2n]		# n
+	p_a = @view ppp[ddim+2n+1:ddim+3n]		# n
+	p_d = @view ppp[ddim+3n+1:ddim+4n]		# n
+	
+	b = ddim+4n
+	k = [@view ppp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
+	b = ddim+4n+n*s
+	h = [@view ppp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
+	b = ddim+4n+2*n*s
+	a = [@view ppp[b+1+(i-1)*N:b+i*N] for i in 1:n]		# nN, [0,1] for TF activation
+	b = ddim+4n+2*n*s+n*N
+	ri = N - (s+1)
+	r = [@view ppp[b+1+(i-1)*ri:b+i*ri] for i in 1:n]	# n(N-(s+1))
+	@assert length(ppp) == b + n*ri
+	# return a named tuple
+	(;u0_dum, m_a, m_d, p_a, p_d, k, h, a, r)			# return named tuple
+end
+
 test_range(x, top) = @assert minimum(x) >= 0 && maximum(x) <= top
 
 function test_param(p,S)
 	P = ode_parse_p(p,S)
-	if length(P.u0_dum) > 0 test_range(P.u0_dum, 1e6) end
-	test_range(P.m_a,1e3)
-	test_range(P.m_d,1e3)
-	test_range(P.p_a,1e3)
-	test_range(P.p_d,1e3)
+	if length(P.u0_dum) > 0 test_range(P.u0_dum, 1e3) end
+	test_range(P.m_a,1e2)
+	test_range(P.m_d,1e2)
+	test_range(P.p_a,1e2)
+	test_range(P.p_d,1e2)
 	test_range(minimum(P.k),1e4)	# need min of min for array of arrays
 	test_range(minimum(P.h),5e0)
 	test_range(minimum(P.a),1e0)
@@ -163,7 +198,7 @@ function init_ode_param(u0,S; noise=2e-3)
 			p[n+1:2n-m] .= 0.1 .* u0[1] .* ones(n-m)	# n-m dummy mRNA, 0.1*u0[1]
 		end
 		# invert to get parameter values to match targets
-		p[1:ddim] .= [inverse_sigmoid(p[i],1e6) for i in 1:ddim]
+		p[1:ddim] .= [inverse_sigmoid(p[i],1e3) for i in 1:ddim]
 	end
 	p[ddim+1:ddim+m] .= 2.0 .* u0[1:m]			# m_a
 	if (n>m) p[ddim+m+1:ddim+n] .= (2.0 * u0[1]) .* ones(n-m) end
@@ -171,7 +206,7 @@ function init_ode_param(u0,S; noise=2e-3)
 	p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
 	p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d
 	
-	p[ddim+1:ddim+4n] .= [inverse_sigmoid(p[i],1e3) for i in ddim+1:ddim+4n]
+	p[ddim+1:ddim+4n] .= [inverse_sigmoid(p[i],1e2) for i in ddim+1:ddim+4n]
 	
 	b = ddim+4n
 	p[b+1:b+n*s] .= 1e2 .* ones(n*s)			# k
@@ -396,8 +431,8 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		# but may be better to constrain parameters rather than variables
 		# to maintain more realistic model
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
-						 lb=zeros(num_var), ub=1e3 .* ones(num_var),	# requires ForwardDiff
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
+						 #lb=zeros(num_var), ub=1e3 .* ones(num_var),	# requires ForwardDiff
 						 cb = callback, maxiters=S.max_it)
 	end
 end
