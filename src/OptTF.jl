@@ -76,8 +76,12 @@ end
 
 # calc_vv(y, k, h) = begin println(length(y), " ", length(k), " ", length(h)); [(y[j]/k[j])^h[j] for j in 1:length(h)] end
 
-calc_v(y, k, h) = [(y[j]/k[j])^h[j] for j in 1:length(h)]
+trunc_zero(x) = x < 0 ? 0. : x
 set_r(r,s) = vcat(ones(s+1),r)
+function calc_v(y, k, h)
+	y .= trunc_zero.(y)
+	[(y[j]/k[j])^h[j] for j in 1:length(h)]
+end
 
 # get full array of f values, for f=generate_tf_activation_f(S.tf_in_num) and
 # P = ode_parse_p(p,S) and y as full array of TF concentrations, S as settings
@@ -91,36 +95,34 @@ function ode_parse_p(p,S)
 	s = S.tf_in_num
 	N = 2^s
 	pp = sigmoid.(p)	# most parameters are positive, this normalizes on [0,1]
-	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
-	# length and max vals for u0_dum, rates, k, h, a, r
-	p_dim = [ddim,4n,n*s,n*s,n*N,n*(N-(s+1))]
-	p_max = [1e3,1e2, 1e4,5e0,1e0,1e1]
+	# length and max vals for rates, k, h, a, r
+	p_dim = [4n,n*s,n*s,n*N,n*(N-(s+1))]
+	p_max = [1e2, 1e4,5e0,1e0,1e1]
 	p_min = zeros(length(p))
-	p_min[ddim+1:ddim+4n] = 0.1 .* ones(4n)
+	p_min[1:4n] = 1e-2 .* ones(4n)
 	p_mult = []
 	for i in 1:length(p_dim)
 		append!(p_mult, p_max[i] .* ones(p_dim[i]))
 	end
-	# set min on rates m_a, m_d, p_a, p_d, causes top to be 1e2 + 1e-1
+	# set min on rates m_a, m_d, p_a, p_d, causes top to be 1e2 + 1e-2
 	ppp = (pp .* p_mult) .+ p_min
-	u0_dum = @view ppp[1:ddim]
-	m_a = @view ppp[ddim+1:ddim+n]			# n
-	m_d = @view ppp[ddim+n+1:ddim+2n]		# n
-	p_a = @view ppp[ddim+2n+1:ddim+3n]		# n
-	p_d = @view ppp[ddim+3n+1:ddim+4n]		# n
+	m_a = @view ppp[1:n]			# n
+	m_d = @view ppp[n+1:2n]		# n
+	p_a = @view ppp[2n+1:3n]		# n
+	p_d = @view ppp[3n+1:4n]		# n
 	
-	b = ddim+4n
+	b = 4n
 	k = [@view ppp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
-	b = ddim+4n+n*s
+	b = 4n+n*s
 	h = [@view ppp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
-	b = ddim+4n+2*n*s
+	b = 4n+2*n*s
 	a = [@view ppp[b+1+(i-1)*N:b+i*N] for i in 1:n]		# nN, [0,1] for TF activation
-	b = ddim+4n+2*n*s+n*N
+	b = 4n+2*n*s+n*N
 	ri = N - (s+1)
 	r = [@view ppp[b+1+(i-1)*ri:b+i*ri] for i in 1:n]	# n(N-(s+1))
 	@assert length(ppp) == b + n*ri
 	# return a named tuple
-	(;u0_dum, m_a, m_d, p_a, p_d, k, h, a, r)			# return named tuple
+	(;m_a, m_d, p_a, p_d, k, h, a, r)			# return named tuple
 end
 
 test_range(x, top) = @assert minimum(x) >= 0 && maximum(x) <= top
@@ -128,11 +130,10 @@ test_range(x, top, offset) = @assert minimum(x) >= offset && maximum(x) <= top+o
 
 function test_param(p,S)
 	P = ode_parse_p(p,S)
-	if length(P.u0_dum) > 0 test_range(P.u0_dum, 1e3) end
-	test_range(P.m_a,1e2,0.1)
-	test_range(P.m_d,1e2,0.1)
-	test_range(P.p_a,1e2,0.1)
-	test_range(P.p_d,1e2,0.1)
+	test_range(P.m_a,1e2,1e-2)
+	test_range(P.m_d,1e2,1e-2)
+	test_range(P.p_a,1e2,1e-2)
+	test_range(P.p_d,1e2,1e-2)
 	test_range(minimum(P.k),1e4)	# need min of min for array of arrays
 	test_range(minimum(P.h),5e0)
 	test_range(minimum(P.a),1e0)
@@ -160,21 +161,24 @@ function init_ode_param(u0,S; noise=2e-3)
 	m = S.m
 	s = S.tf_in_num
 	N = 2^s
+	# dummies packed as n mRNA and n-m proteins
 	ddim = S.opt_dummy_u0 ? 2*n - m : 0
 	if S.opt_dummy_u0
-		p[n-m+1:n] .= 0.1 .* u0[1:m]					# mRNA for m tracked proteins, 0.1*u0
+		p[1:m] .= 0.1 .* u0[1:m]						# m mRNA for tracked proteins, 0.1*u0
 		if n > m
-			p[1:n-m] .= u0[1] .* ones(n-m)				# n-m dummy proteins set to u0[1]
-			p[n+1:2n-m] .= 0.1 .* u0[1] .* ones(n-m)	# n-m dummy mRNA, 0.1*u0[1]
+			p[m+1:n] .= 0.1 .* u0[1] .* ones(n-m)		# n-m dummy mRNA, 0.1*u0[1]
+			p[n+1:2n-m] .= u0[1] .* ones(n-m)			# n-m dummy proteins set to u0[1]
 		end
 		# invert to get parameter values to match targets
 		p[1:ddim] .= [inverse_sigmoid(p[i],1e3) for i in 1:ddim]
 	end
-	p[ddim+1:ddim+m] .= 2.0 .* u0[1:m]			# m_a
-	if (n>m) p[ddim+m+1:ddim+n] .= (2.0 * u0[1]) .* ones(n-m) end
+	p[ddim+1:ddim+m] .= 0.2 .* u0[1:m]			# m_a
+	if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[1]) .* ones(n-m) end
 	p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
 	p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
 	p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d
+	# ode_parse adds 1e-2 to rate parameters, so subtract here	
+	p[ddim+1:ddim+4n] .= p[ddim+1:ddim+4n] .- (1e-2 .* ones(4n))
 	
 	p[ddim+1:ddim+4n] .= [inverse_sigmoid(p[i],1e2) for i in ddim+1:ddim+4n]
 	
@@ -228,11 +232,11 @@ function setup_diffeq_func(S)
 	# If optimizing initial conditions for dummy dimensions, then for initial condition u0,
 	# dummy dimensions are first entries of p
 	predict_node_dummy(p, prob, u_init) =
-	  		Array(prob(vcat(u_init,1e6*sigmoid.(p[1:ddim])), p[ddim+1:end]))
+	  		Array(prob(vcat(u_init,1e3*sigmoid.(p[1:ddim])), p[ddim+1:end]))
 	predict_node_nodummy(p, prob, u_init) = Array(prob(u_init, p))
 	predict_ode_dummy(p, prob, u_init) =
-			solve(prob, S.solver, u0=vcat(1e6*sigmoid.(p[1:S.n]),
-					u_init,1e6*sigmoid.(p[S.n+1:ddim_all])), p=p[ddim_all+1:end])
+			solve(prob, S.solver, u0=vcat(1e3*sigmoid.(p[1:S.n]),
+					u_init,1e3*sigmoid.(p[S.n+1:ddim_all])), p=p[ddim_all+1:end])
 	predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
 
 	# For NODE, many simple options to build alternative network architecture, see SciML docs
@@ -322,7 +326,7 @@ function loss(p, S, L)
 	pred_diff = pred[:,2:end] - pred[:,1:end-1]
 	loss_diff = sum(abs2, L.w[:,1:pred_length-1] .*
 						(L.data_diff[:,1:pred_length-1] .- pred_diff[:,1:pred_length-1]))
-	loss = loss*loss_diff
+	loss = loss + 1e3*loss_diff
 	return loss, S, L, pred_all
 end
 
@@ -376,19 +380,20 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i == 1)
 			p = S.use_node ? prob.p : p_init
-			if S.opt_dummy_u0
-				p = S.use_node ? vcat(randn(S.n-S.m),p) : vcat(randn(2S.n-S.m),p)
-			end
+			if S.opt_dummy_u0 && S.use_node p = vcat(randn(S.n-S.m),p) end
 		else
 			p = result.u
-			test_param(p,S)		# check that params are within bounds
+			if !S.use_node
+				ddim = S.opt_dummy_u0 ? 2S.n - S.m : 0
+				test_param(p[ddim+1:end],S)		# check that params are within bounds
+			end
 		end
 		
 		# use to look at plot of initial conditions, set to false for normal use
 		if false
 			loss_v, _, _, pred_all = loss(p,S,L)
 			callback(p, loss_v, S, L, pred_all)
-			return ode_parse_p(p,S)
+			@assert false
 		end
 		
 		# see https://galacticoptim.sciml.ai/stable/API/optimization_function for
@@ -401,7 +406,8 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		# lb=zeros(num_var), ub=1e3 .* ones(num_var),
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+						 lb=zeros(num_var), ub=1e3 .* ones(num_var),
 						 cb = callback, maxiters=S.max_it)
 	end
 end
