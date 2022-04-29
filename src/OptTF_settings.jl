@@ -3,7 +3,7 @@ using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, default_node, reset_rseed, recalc_settings
 
 default_ode() = Settings(n=3, tf_in_num=2, rtol=1e-4, atol=1e-6, adm_learn=0.05,
-					train_frac=1.0, opt_dummy_u0 = false)
+					train_frac=0.5, opt_dummy_u0 = false)
 default_node() = Settings(use_node=true, rtol=1e-3, atol=1e-4, rtolR=1e-6, atolR=1e-8,
 						max_it=500, solver = TRBDF2())
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
@@ -92,6 +92,7 @@ git_vers = chomp(read(`git -C $proj_dir rev-parse --short HEAD`,String))
 generate_rand_seed = true
 preset_seed = 0x0861a3ea66cd3e9a	# use if generate_rand_seed = false
 actual_seed = set_rand_seed(generate_rand_seed, preset_seed)
+set_rseed = set_rand_seed
 
 # Training done iteratively, starting with first part of time series,
 # then adding additional time series steps and continuing the fit

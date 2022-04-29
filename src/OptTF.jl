@@ -317,7 +317,7 @@ function loss(p, S, L)
 	pred_diff = pred[:,2:end] - pred[:,1:end-1]
 	loss_diff = sum(abs2, L.w[:,1:pred_length-1] .*
 						(L.data_diff[:,1:pred_length-1] .- pred_diff[:,1:pred_length-1]))
-	loss = loss + loss_diff + loss*loss_diff
+	loss = loss*loss_diff
 	return loss, S, L, pred_all
 end
 
@@ -335,7 +335,9 @@ function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc)
 	return vv
 end
 
-function fit_diffeq(S; noise=0.05)
+# new_rseed true uses new seed, false reuses preset_seed
+function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
+	S.set_rseed(new_rseed, S.preset_seed)
 	data, data_diff, u0, tspan, tsteps = S.f_data(S);
 	dudt, ode!, predict = setup_diffeq_func(S);
 	
@@ -389,7 +391,8 @@ function fit_diffeq(S; noise=0.05)
 		# common choices AutoZygote() and AutoForwardDiff()
 		# Zygote may fail depending on variety of issues that might be fixed
 		# ForwardDiff more reliable but may be slower
-		# for constraints on variables, must use AutoForwardDiff(),
+		
+		# For constraints on variables, must use AutoForwardDiff(),
 		# but may be better to constrain parameters rather than variables
 		# to maintain more realistic model
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
