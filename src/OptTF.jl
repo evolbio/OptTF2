@@ -322,11 +322,16 @@ function loss(p, S, L)
 	if pred_length != length(L.w[1,:]) println("Mismatch") end
 	# add cost for concentrations over 1e3
 	loss = sum(abs2, L.w[:,1:pred_length] .* (L.data[:,1:pred_length] .- pred))
+	
 	# add loss amount for differences in slopes by first diffs
-	pred_diff = pred[:,2:end] - pred[:,1:end-1]
-	loss_diff = sum(abs2, L.w[:,1:pred_length-1] .*
-						(L.data_diff[:,1:pred_length-1] .- pred_diff[:,1:pred_length-1]))
-	loss = loss + 1e3*loss_diff
+	# probably not useful because if difficulty fitting with MSE loss, using
+	# slopes will typically not fix the difficulty
+	
+	# pred_diff = pred[:,2:end] - pred[:,1:end-1]
+	# loss_diff = sum(abs2, L.w[:,1:pred_length-1] .*
+	#					(L.data_diff[:,1:pred_length-1] .- pred_diff[:,1:pred_length-1]))
+	# loss = loss + 0e3*loss_diff
+
 	return loss, S, L, pred_all
 end
 
