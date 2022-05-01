@@ -94,7 +94,13 @@ function ode_parse_p(p,S)
 	n = S.n
 	s = S.tf_in_num
 	N = 2^s
-	pp = sigmoid.(p)	# most parameters are positive, this normalizes on [0,1]
+	# transform parameter values for gradients into values used for ode
+	# min val for rates is 1e-2, 0 for all others, max values vary, see p_max
+	# see linear_sigmoid() for transform of gradient params to ode params
+	d = 1e-2	# cutoff from boundaries at which change from linear to sigmoid
+	k1 = d*(1.0+exp(-10.0*d))
+	k2 = 10.0*(1.0-d) + log(d/(1.0-d))
+	pp = linear_sigmoid.(p, d, k1, k2)	# this normalizes on [0,1] with linear_sigmoid pattern
 	# length and max vals for rates, k, h, a, r
 	p_dim = [4n,n*s,n*s,n*N,n*(N-(s+1))]
 	p_max = [1e2, 1e4,5e0,1e0,1e1]
@@ -140,13 +146,28 @@ function test_param(p,S)
 	if S.tf_in_num > 1 test_range(minimum(P.r),1e1) end
 end
 
-# Because parameters are transformed by sigmoid function, must invert that function to set
-# values, ie, to get a parameter value of m, must invert m = k/(1+e^-p), in which k is the 
-# multiplier used to make parameter range = [0,k]. Inverting yields parameter value p
-function inverse_sigmoid(m, k)
-	@assert k >= m
-	@assert m >= 0
-	log(m/(k-m))
+# precalculate and pass k1 = d(1+exp(-10d)) and k2 = 10(max-d) + log(d/(max-d))
+# goes from encoded value for gradients -> param value for ode
+# see mma file linear_sigmoid.nb
+function linear_sigmoid(p, d, k1, k2)
+	if p < d
+		k1 / (1+exp(-10.0*p))
+	elseif p > 1.0 - d
+		1.0 / (1 + exp(-10.0*p + k2))
+	else
+		p
+	end
+end
+
+# inverts from param value for ode -> encoded value for gradients 
+function inverse_linear_sigmoid(p, d, k1, k2)
+	if p < d
+		0.1*log(p/(k1-p))
+	elseif p > 1.0 - d
+		0.1*(k2 + log(p/(1-p)))
+	else
+		p
+	end
 end
 
 # Goal is to setup near equilibrium matching u0 for tracked proteins, dummy proteins set at
@@ -154,6 +175,10 @@ end
 # use a = 1 for all a values, so that activation f is 0.5
 # Yields p_a=10, p_d=m_d=1, m_a=0.2 u, for which u is target initial value of protein
 # Alternatively, start with one protein type present and all other protein and mRNA conc at 0
+
+# All params have min value at 0 except rates which are min at 1e-2, all params have max vals
+# see ode_parse_p()
+
 function init_ode_param(u0,S; noise=2e-3, start_equil=true)
 	@assert length(u0) == (S.opt_dummy_u0 ? S.m : 2S.n)
 	num_p = ode_num_param(S)
@@ -164,6 +189,10 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=true)
 	N = 2^s
 	ddim = S.opt_dummy_u0 ? 2*n - m : 0
 	
+	d = 1e-2	# cutoff from boundaries at which change from linear to sigmoid
+	k1 = d*(1.0+exp(-10.0*d))
+	k2 = 10.0*(1.0-d) + log(d/(1.0-d))
+
 	if start_equil == true || S.opt_dummy_u0
 		# dummies packed as n mRNA and n-m proteins
 		if S.opt_dummy_u0
@@ -173,7 +202,7 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=true)
 				p[n+1:2n-m] .= u0[1] .* ones(n-m)			# n-m dummy proteins set to u0[1]
 			end
 			# invert to get parameter values to match targets
-			p[1:ddim] .= [inverse_sigmoid(p[i],1e3) for i in 1:ddim]
+			p[1:ddim] .= 1e3 .* [inverse_sigmoid(p[i]/1e3,d,k1,k2) for i in 1:ddim]
 		end
 		p[ddim+1:ddim+m] .= 0.2 .* u0[1:m]			# m_a
 		if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[1]) .* ones(n-m) end
@@ -191,24 +220,24 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=true)
 	# ode_parse adds 1e-2 to rate parameters, so subtract here	
 	p[ddim+1:ddim+4n] .= p[ddim+1:ddim+4n] .- (1e-2 .* ones(4n))
 	
-	p[ddim+1:ddim+4n] .= [inverse_sigmoid(p[i],1e2) for i in ddim+1:ddim+4n]
+	p[ddim+1:ddim+4n] .= 1e2 .* [inverse_sigmoid(p[i]/1e2,d,k1,k2) for i in ddim+1:ddim+4n]
 	
 	b = ddim+4n
 	p[b+1:b+n*s] .= 1e2 .* ones(n*s)			# k
-	p[b+1:b+n*s] .= [inverse_sigmoid(p[i],1e4) for i in b+1:b+n*s]
+	p[b+1:b+n*s] .= 1e4 .* [inverse_sigmoid(p[i]/1e4,d,k1,k2) for i in b+1:b+n*s]
 	
 	b = ddim+4n+n*s
 	p[b+1:b+n*s] .= ones(n*s)					# h
-	p[b+1:b+n*s] .= [inverse_sigmoid(p[i],5e0) for i in b+1:b+n*s]
+	p[b+1:b+n*s] .= 5e0 .* [inverse_sigmoid(p[i]/5e0,d,k1,k2) for i in b+1:b+n*s]
 	
 	b = ddim+4n+2n*s
 	p[b+1:b+n*N] .= 0.5 .* ones(n*N)			# a
-	p[b+1:b+n*N] .= [inverse_sigmoid(p[i],1e0) for i in b+1:b+n*N]
+	p[b+1:b+n*N] .= [inverse_sigmoid(p[i],d,k1,k2) for i in b+1:b+n*N]
 	
 	b = ddim+4n+2*n*s+n*N
 	n_r = n*(N-(s+1))
 	p[b+1:b+n_r] .= ones(n_r)					# r
-	p[b+1:b+n_r] .= [inverse_sigmoid(p[i],1e1) for i in b+1:b+n_r]
+	p[b+1:b+n_r] .= 1e1 .* [inverse_sigmoid(p[i]/1e1,d,k1,k2) for i in b+1:b+n_r]
 	
 	@assert (b+n_r) == num_p
 	# Add small amount of noise, note that will be transformed by sigmoid, so nonlinear
