@@ -154,7 +154,7 @@ end
 # use a = 1 for all a values, so that activation f is 0.5
 # Yields p_a=10, p_d=m_d=1, m_a=0.2 u, for which u is target initial value of protein
 # Alternatively, start with one protein type present and all other protein and mRNA conc at 0
-function init_ode_param(u0,S; noise=2e-3, start_equil=false)
+function init_ode_param(u0,S; noise=2e-3, start_equil=true)
 	@assert length(u0) == (S.opt_dummy_u0 ? S.m : 2S.n)
 	num_p = ode_num_param(S)
 	p = zeros(num_p)
@@ -390,7 +390,8 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 					NeuralODE(dudt, (0.0,last_time), S.solver, saveat = ts, 
 						reltol = S.rtol, abstol = S.atol) :
 					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
-						(0.0,last_time), p_init, saveat = ts, reltol = S.rtol, abstol = S.atol)
+						(-1000.0,last_time), p_init, saveat = ts,
+						reltol = S.rtol, abstol = S.atol)
 		L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
@@ -406,7 +407,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		end
 		
 		# use to look at plot of initial conditions, set to false for normal use
-		if true
+		if false
 			loss_v, _, _, pred_all = loss(p,S,L)
 			callback(p, loss_v, S, L, pred_all)
 			@assert false
