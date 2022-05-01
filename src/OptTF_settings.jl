@@ -2,8 +2,8 @@ module OptTF_settings
 using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, default_node, reset_rseed, recalc_settings
 
-default_ode() = Settings(n=4, tf_in_num=3, rtol=1e-4, atol=1e-6, adm_learn=0.05,
-					train_frac=0.5, opt_dummy_u0 = false)
+default_ode() = Settings(n=3, tf_in_num=1, rtol=1e-7, atol=1e-9, adm_learn=0.2,
+					train_frac=0.35, opt_dummy_u0 = false)
 default_node() = Settings(use_node=true, rtol=1e-3, atol=1e-4, rtolR=1e-6, atolR=1e-8,
 						max_it=500, solver = TRBDF2())
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
@@ -58,12 +58,12 @@ m = 3					# repressilator is 3, vary as needed
 # with random_regular_digraph, row 1 has no out connections, so initially make
 # matrix of size n+1 then delete first row and column
 # no self connections by this algorithm
-gr_type = 1				# 1 => random, 2 => cycle for use in matching repressilator 
+gr_type = 2				# 1 => random, 2 => cycle for use in matching repressilator 
 tf_in_num = 4			# should be <= n-1 if self avoided, <= if w/self
 @assert tf_in_num < n "tf_in_num ($tf_in_num) should be less than n ($n)"
 
 # array of arrays, each entry array is the list of incoming TF connections for a gene
-tf_in = gr_type == 2 ?
+tf_in = gr_type == 1 ?
 	circshift([[i] for i in 1:n],1)	:	# cycle_digraph, as in repressilator
 	[sort(sample(1:n, tf_in_num, replace=false)) for i in 1:n] # digraph w/tf_in_num in degree
 
@@ -77,7 +77,7 @@ atol = 1e-12		# absolute tolerance for solver, ODE -> ~1e-12, NODE -> ~1e-3 or -
 rtolR = 1e-10		# relative tolerance for solver for refine_fit stages
 atolR = 1e-12		# absolute tolerance for solver for refine_fit stages
 adm_learn = 0.0005	# Adam rate, >=0.0002 for Tsit5, >=0.0005 for TRBDF2, change as needed
-max_it = 200		# max iterates for each incremental learning step
+max_it = 500		# max iterates for each incremental learning step
 					# try 200 for ODE, small tolerances, and Rodas4P solver
 					# and 500 for NODE, with larger tolerances and TRBDF2
 print_grad = false	# show gradient on terminal, requires significant overhead

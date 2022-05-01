@@ -107,7 +107,7 @@ function ode_parse_p(p,S)
 	# set min on rates m_a, m_d, p_a, p_d, causes top to be 1e2 + 1e-2
 	ppp = (pp .* p_mult) .+ p_min
 	m_a = @view ppp[1:n]			# n
-	m_d = @view ppp[n+1:2n]		# n
+	m_d = @view ppp[n+1:2n]			# n
 	p_a = @view ppp[2n+1:3n]		# n
 	p_d = @view ppp[3n+1:4n]		# n
 	
@@ -137,7 +137,7 @@ function test_param(p,S)
 	test_range(minimum(P.k),1e4)	# need min of min for array of arrays
 	test_range(minimum(P.h),5e0)
 	test_range(minimum(P.a),1e0)
-	test_range(minimum(P.r),1e1)
+	if S.tf_in_num > 1 test_range(minimum(P.r),1e1) end
 end
 
 # Because parameters are transformed by sigmoid function, must invert that function to set
@@ -153,7 +153,8 @@ end
 # equilibrium value of first tracked protein, u0[1], and all mRNAs at 0.1 times protein level
 # use a = 1 for all a values, so that activation f is 0.5
 # Yields p_a=10, p_d=m_d=1, m_a=0.2 u, for which u is target initial value of protein
-function init_ode_param(u0,S; noise=2e-3)
+# Alternatively, start with one protein type present and all other protein and mRNA conc at 0
+function init_ode_param(u0,S; noise=2e-3, start_equil=false)
 	@assert length(u0) == (S.opt_dummy_u0 ? S.m : 2S.n)
 	num_p = ode_num_param(S)
 	p = zeros(num_p)
@@ -161,22 +162,32 @@ function init_ode_param(u0,S; noise=2e-3)
 	m = S.m
 	s = S.tf_in_num
 	N = 2^s
-	# dummies packed as n mRNA and n-m proteins
 	ddim = S.opt_dummy_u0 ? 2*n - m : 0
-	if S.opt_dummy_u0
-		p[1:m] .= 0.1 .* u0[1:m]						# m mRNA for tracked proteins, 0.1*u0
-		if n > m
-			p[m+1:n] .= 0.1 .* u0[1] .* ones(n-m)		# n-m dummy mRNA, 0.1*u0[1]
-			p[n+1:2n-m] .= u0[1] .* ones(n-m)			# n-m dummy proteins set to u0[1]
+	
+	if start_equil == true || S.opt_dummy_u0
+		# dummies packed as n mRNA and n-m proteins
+		if S.opt_dummy_u0
+			p[1:m] .= 0.1 .* u0[1:m]						# m mRNA for tracked proteins, 0.1*u0
+			if n > m
+				p[m+1:n] .= 0.1 .* u0[1] .* ones(n-m)		# n-m dummy mRNA, 0.1*u0[1]
+				p[n+1:2n-m] .= u0[1] .* ones(n-m)			# n-m dummy proteins set to u0[1]
+			end
+			# invert to get parameter values to match targets
+			p[1:ddim] .= [inverse_sigmoid(p[i],1e3) for i in 1:ddim]
 		end
-		# invert to get parameter values to match targets
-		p[1:ddim] .= [inverse_sigmoid(p[i],1e3) for i in 1:ddim]
+		p[ddim+1:ddim+m] .= 0.2 .* u0[1:m]			# m_a
+		if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[1]) .* ones(n-m) end
+		p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
+		p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
+		p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d
+	else
+		u0 .= vcat(zeros(n),[20.],zeros(n-1))
+		p[ddim+1:ddim+m] .= 10.0 .* ones(n)			# m_a
+		p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
+		p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
+		p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d		
 	end
-	p[ddim+1:ddim+m] .= 0.2 .* u0[1:m]			# m_a
-	if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[1]) .* ones(n-m) end
-	p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
-	p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
-	p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d
+	
 	# ode_parse adds 1e-2 to rate parameters, so subtract here	
 	p[ddim+1:ddim+4n] .= p[ddim+1:ddim+4n] .- (1e-2 .* ones(4n))
 	
@@ -395,7 +406,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		end
 		
 		# use to look at plot of initial conditions, set to false for normal use
-		if false
+		if true
 			loss_v, _, _, pred_all = loss(p,S,L)
 			callback(p, loss_v, S, L, pred_all)
 			@assert false
@@ -412,7 +423,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
 						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
-						 lb=zeros(num_var), ub=1e3 .* ones(num_var),
+						 #lb=zeros(num_var), ub=1e3 .* ones(num_var),
 						 cb = callback, maxiters=S.max_it)
 	end
 end
