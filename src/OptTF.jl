@@ -195,17 +195,17 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=true)
 
 	if start_equil == true || S.opt_dummy_u0
 		# dummies packed as n mRNA and n-m proteins
+		# not transformed between linear_sigmoid and inverse_lin_sigmoid, use raw values
 		if S.opt_dummy_u0
 			p[1:m] .= 0.1 .* u0[1:m]						# m mRNA for tracked proteins, 0.1*u0
 			if n > m
 				p[m+1:n] .= 0.1 .* u0[1] .* ones(n-m)		# n-m dummy mRNA, 0.1*u0[1]
 				p[n+1:2n-m] .= u0[1] .* ones(n-m)			# n-m dummy proteins set to u0[1]
 			end
-			# invert to get parameter values to match targets
-			p[1:ddim] .= 1e3 .* [inverse_lin_sigmoid(p[i]/1e3,d,k1,k2) for i in 1:ddim]
 		end
-		p[ddim+1:ddim+m] .= 0.2 .* u0[1:m]			# m_a
-		if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[1]) .* ones(n-m) end
+		base = S.opt_dummy_u0 ? 0 : n				# if false, u0 is 2S.n, if true, u0 is S.m
+		p[ddim+1:ddim+m] .= 0.2 .* u0[base+1:base+m] # m_a
+		if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[base+1]) .* ones(n-m) end
 		p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
 		p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
 		p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d
@@ -272,11 +272,11 @@ function setup_diffeq_func(S)
 	# If optimizing initial conditions for dummy dimensions, then for initial condition u0,
 	# dummy dimensions are first entries of p
 	predict_node_dummy(p, prob, u_init) =
-	  		Array(prob(vcat(u_init,1e3*sigmoid.(p[1:ddim])), p[ddim+1:end]))
+	  		Array(prob(vcat(u_init,(p[1:ddim])), p[ddim+1:end]))
 	predict_node_nodummy(p, prob, u_init) = Array(prob(u_init, p))
 	predict_ode_dummy(p, prob, u_init) =
-			solve(prob, S.solver, u0=vcat(1e3*sigmoid.(p[1:S.n]),
-					u_init,1e3*sigmoid.(p[S.n+1:ddim_all])), p=p[ddim_all+1:end])
+			solve(prob, S.solver, u0=vcat((p[1:S.n]),
+					u_init,(p[S.n+1:ddim_all])), p=p[ddim_all+1:end])
 	predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
 
 	# For NODE, many simple options to build alternative network architecture, see SciML docs
@@ -419,7 +419,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 					NeuralODE(dudt, (0.0,last_time), S.solver, saveat = ts, 
 						reltol = S.rtol, abstol = S.atol) :
 					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
-						(-1000.0,last_time), p_init, saveat = ts,
+						(0.0,last_time), p_init, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
@@ -436,7 +436,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		end
 		
 		# use to look at plot of initial conditions, set to false for normal use
-		if false
+		if true
 			loss_v, _, _, pred_all = loss(p,S,L)
 			callback(p, loss_v, S, L, pred_all)
 			@assert false
