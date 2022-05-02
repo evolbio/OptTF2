@@ -160,7 +160,7 @@ function linear_sigmoid(p, d, k1, k2)
 end
 
 # inverts from param value for ode -> encoded value for gradients 
-function inverse_linear_sigmoid(p, d, k1, k2)
+function inverse_lin_sigmoid(p, d, k1, k2)
 	if p < d
 		0.1*log(p/(k1-p))
 	elseif p > 1.0 - d
@@ -202,7 +202,7 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=true)
 				p[n+1:2n-m] .= u0[1] .* ones(n-m)			# n-m dummy proteins set to u0[1]
 			end
 			# invert to get parameter values to match targets
-			p[1:ddim] .= 1e3 .* [inverse_sigmoid(p[i]/1e3,d,k1,k2) for i in 1:ddim]
+			p[1:ddim] .= 1e3 .* [inverse_lin_sigmoid(p[i]/1e3,d,k1,k2) for i in 1:ddim]
 		end
 		p[ddim+1:ddim+m] .= 0.2 .* u0[1:m]			# m_a
 		if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[1]) .* ones(n-m) end
@@ -220,24 +220,24 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=true)
 	# ode_parse adds 1e-2 to rate parameters, so subtract here	
 	p[ddim+1:ddim+4n] .= p[ddim+1:ddim+4n] .- (1e-2 .* ones(4n))
 	
-	p[ddim+1:ddim+4n] .= 1e2 .* [inverse_sigmoid(p[i]/1e2,d,k1,k2) for i in ddim+1:ddim+4n]
+	p[ddim+1:ddim+4n] .= [inverse_lin_sigmoid(p[i]/1e2,d,k1,k2) for i in ddim+1:ddim+4n]
 	
 	b = ddim+4n
 	p[b+1:b+n*s] .= 1e2 .* ones(n*s)			# k
-	p[b+1:b+n*s] .= 1e4 .* [inverse_sigmoid(p[i]/1e4,d,k1,k2) for i in b+1:b+n*s]
+	p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/1e4,d,k1,k2) for i in b+1:b+n*s]
 	
 	b = ddim+4n+n*s
 	p[b+1:b+n*s] .= ones(n*s)					# h
-	p[b+1:b+n*s] .= 5e0 .* [inverse_sigmoid(p[i]/5e0,d,k1,k2) for i in b+1:b+n*s]
+	p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/5e0,d,k1,k2) for i in b+1:b+n*s]
 	
 	b = ddim+4n+2n*s
 	p[b+1:b+n*N] .= 0.5 .* ones(n*N)			# a
-	p[b+1:b+n*N] .= [inverse_sigmoid(p[i],d,k1,k2) for i in b+1:b+n*N]
+	p[b+1:b+n*N] .= [inverse_lin_sigmoid(p[i],d,k1,k2) for i in b+1:b+n*N]
 	
 	b = ddim+4n+2*n*s+n*N
 	n_r = n*(N-(s+1))
 	p[b+1:b+n_r] .= ones(n_r)					# r
-	p[b+1:b+n_r] .= 1e1 .* [inverse_sigmoid(p[i]/1e1,d,k1,k2) for i in b+1:b+n_r]
+	p[b+1:b+n_r] .= [inverse_lin_sigmoid(p[i]/1e1,d,k1,k2) for i in b+1:b+n_r]
 	
 	@assert (b+n_r) == num_p
 	# Add small amount of noise, note that will be transformed by sigmoid, so nonlinear
