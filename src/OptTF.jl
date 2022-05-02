@@ -79,6 +79,7 @@ end
 trunc_zero(x) = x < 0 ? 0. : x
 set_r(r,s) = vcat(ones(s+1),r)
 function calc_v(y, k, h)
+	# println("y, k, h sizes = ", length(y), " ", length(k), " ", length(h))
 	y .= trunc_zero.(y)
 	[(y[j]/k[j])^h[j] for j in 1:length(h)]
 end
@@ -103,7 +104,7 @@ function ode_parse_p(p,S)
 	pp = linear_sigmoid.(p, d, k1, k2)	# this normalizes on [0,1] with linear_sigmoid pattern
 	# length and max vals for rates, k, h, a, r
 	p_dim = [4n,n*s,n*s,n*N,n*(N-(s+1))]
-	p_max = [1e2, 1e4,5e0,1e0,1e1]
+	p_max = [1e2,1e4,5e0,1e0,1e1]
 	p_min = zeros(length(p))
 	p_min[1:4n] = 1e-2 .* ones(4n)
 	p_mult = []
@@ -179,7 +180,7 @@ end
 # All params have min value at 0 except rates which are min at 1e-2, all params have max vals
 # see ode_parse_p()
 
-function init_ode_param(u0,S; noise=2e-3, start_equil=true)
+function init_ode_param(u0,S; noise=2e-3, start_equil=false)
 	@assert length(u0) == (S.opt_dummy_u0 ? S.m : 2S.n)
 	num_p = ode_num_param(S)
 	p = zeros(num_p)
@@ -223,11 +224,11 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=true)
 	p[ddim+1:ddim+4n] .= [inverse_lin_sigmoid(p[i]/1e2,d,k1,k2) for i in ddim+1:ddim+4n]
 	
 	b = ddim+4n
-	p[b+1:b+n*s] .= 1e2 .* ones(n*s)			# k
+	p[b+1:b+n*s] .= 1e0 .* ones(n*s)			# k
 	p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/1e4,d,k1,k2) for i in b+1:b+n*s]
 	
 	b = ddim+4n+n*s
-	p[b+1:b+n*s] .= ones(n*s)					# h
+	p[b+1:b+n*s] .= 2.0 .* ones(n*s)			# h
 	p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/5e0,d,k1,k2) for i in b+1:b+n*s]
 	
 	b = ddim+4n+2n*s
@@ -290,12 +291,12 @@ function setup_diffeq_func(S)
 		dudt = nothing
 		function ode!(du, u, p, t, S, f)
 			n = S.n
-			u_tf = @view u[1:n]
-			u_pr = @view u[n+1:2n]
+			u_m = @view u[1:n]			# mRNA
+			u_p = @view u[n+1:2n]		# protein
 			P = ode_parse_p(p,S)
-			f_val = calc_f(f,P,u_pr,S)
-			du[1:n] .= P.m_a .* f_val .- P.m_d .* u_tf			# mRNA level
-			du[n+1:2n] .= P.p_a .* u_tf .- P.p_d .* u_pr		# protein level
+			f_val = calc_f(f,P,u_p,S)
+			du[1:n] .= P.m_a .* f_val .- P.m_d .* u_m			# mRNA level
+			du[n+1:2n] .= P.p_a .* u_m .- P.p_d .* u_p		# protein level
 		end
 		predict = S.opt_dummy_u0 ?
 			predict_ode_dummy :
@@ -419,7 +420,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 					NeuralODE(dudt, (0.0,last_time), S.solver, saveat = ts, 
 						reltol = S.rtol, abstol = S.atol) :
 					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
-						(0.0,last_time), p_init, saveat = ts,
+						(-000.0,last_time), p_init, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
@@ -436,7 +437,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		end
 		
 		# use to look at plot of initial conditions, set to false for normal use
-		if true
+		if false
 			loss_v, _, _, pred_all = loss(p,S,L)
 			callback(p, loss_v, S, L, pred_all)
 			@assert false
@@ -452,7 +453,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		# lb=zeros(num_var), ub=1e3 .* ones(num_var),
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
 						 #lb=zeros(num_var), ub=1e3 .* ones(num_var),
 						 cb = callback, maxiters=S.max_it)
 	end
