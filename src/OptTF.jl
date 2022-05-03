@@ -272,12 +272,15 @@ function setup_diffeq_func(S)
 						elseif (S.activate == 3) sigmoid else swish end
 	# If optimizing initial conditions for dummy dimensions, then for initial condition u0,
 	# dummy dimensions are first entries of p
+	d = 1e-2	# cutoff from boundaries at which change from linear to sigmoid
+	k1 = d*(1.0+exp(-10.0*d))
+	k2 = 10.0*(1.0-d) + log(d/(1.0-d))
 	predict_node_dummy(p, prob, u_init) =
-	  		Array(prob(vcat(u_init,(p[1:ddim])), p[ddim+1:end]))
+	  		Array(prob(vcat(u_init,(linear_sigmoid.(p[1:ddim],d,k1,d2))), p[ddim+1:end]))
 	predict_node_nodummy(p, prob, u_init) = Array(prob(u_init, p))
 	predict_ode_dummy(p, prob, u_init) =
-			solve(prob, S.solver, u0=vcat((p[1:S.n]),
-					u_init,(p[S.n+1:ddim_all])), p=p[ddim_all+1:end])
+			solve(prob, S.solver, u0=vcat((linear_sigmoid.(p[1:S.n],d,k1,k2)),
+					u_init,(linear_sigmoid.(p[S.n+1:ddim_all],d,k1,k2))), p=p[ddim_all+1:end])
 	predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
 
 	# For NODE, many simple options to build alternative network architecture, see SciML docs
@@ -314,6 +317,9 @@ function callback(p, loss_val, S, L, pred_all;
 		println(@sprintf("%5.3e; %5.3e", loss_val, gnorm))
 	else
 		println(@sprintf("%5.3e", loss_val))
+		b = S.opt_dummy_u0 ? 2S.n-S.m : 0
+		#P = ode_parse_p(p[b+1:end],S)
+		#display(P.a)
 	end
 	if doplot
 		len = length(pred_all[1,:])
