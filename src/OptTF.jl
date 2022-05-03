@@ -198,10 +198,13 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=false)
 		# dummies packed as n mRNA and n-m proteins
 		# not transformed between linear_sigmoid and inverse_lin_sigmoid, use raw values
 		if S.opt_dummy_u0
-			p[1:m] .= 0.1 .* u0[1:m]						# m mRNA for tracked proteins, 0.1*u0
+			# m mRNA for tracked proteins, 0.1*u0
+			p[1:m] .= [inverse_lin_sigmoid(0.1*u0[i]/1e4,d,k1,k2) for i in 1:m]					
 			if n > m
-				p[m+1:n] .= 0.1 .* u0[1] .* ones(n-m)		# n-m dummy mRNA, 0.1*u0[1]
-				p[n+1:2n-m] .= u0[1] .* ones(n-m)			# n-m dummy proteins set to u0[1]
+				# n-m dummy mRNA, 0.1*u0[1]
+				p[m+1:n] .= [inverse_lin_sigmoid(0.1*u0[1]/1e4,d,k1,k2) for i in 1:m+1:n]
+				# n-m dummy proteins set to u0[1]
+				p[n+1:2n-m] .= [inverse_lin_sigmoid(u0[1]/1e4,d,k1,k2) for i in 1:n+1:2n-m]
 			end
 		end
 		base = S.opt_dummy_u0 ? 0 : n				# if false, u0 is 2S.n, if true, u0 is S.m
@@ -276,11 +279,12 @@ function setup_diffeq_func(S)
 	k1 = d*(1.0+exp(-10.0*d))
 	k2 = 10.0*(1.0-d) + log(d/(1.0-d))
 	predict_node_dummy(p, prob, u_init) =
-	  		Array(prob(vcat(u_init,(linear_sigmoid.(p[1:ddim],d,k1,d2))), p[ddim+1:end]))
+	  		Array(prob(vcat(u_init,(1e4.*linear_sigmoid.(p[1:ddim],d,k1,d2))), p[ddim+1:end]))
 	predict_node_nodummy(p, prob, u_init) = Array(prob(u_init, p))
 	predict_ode_dummy(p, prob, u_init) =
-			solve(prob, S.solver, u0=vcat((linear_sigmoid.(p[1:S.n],d,k1,k2)),
-					u_init,(linear_sigmoid.(p[S.n+1:ddim_all],d,k1,k2))), p=p[ddim_all+1:end])
+			solve(prob, S.solver, u0=vcat((1e4.*linear_sigmoid.(p[1:S.n],d,k1,k2)),
+					u_init,(1e4.*linear_sigmoid.(p[S.n+1:ddim_all],d,k1,k2))),
+					p=p[ddim_all+1:end])
 	predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
 
 	# For NODE, many simple options to build alternative network architecture, see SciML docs
