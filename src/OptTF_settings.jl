@@ -2,7 +2,7 @@ module OptTF_settings
 using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, default_node, reset_rseed, recalc_settings
 
-default_ode() = Settings(gr_type = 1, n=4, tf_in_num=3, rtol=1e-7, atol=1e-9,
+default_ode() = Settings(allow_self = true, gr_type = 1, n=3, tf_in_num=3, rtol=1e-7, atol=1e-9,
 					adm_learn=0.02, train_frac=0.25, opt_dummy_u0 = true)
 default_node() = Settings(use_node=true, rtol=1e-3, atol=1e-4, rtolR=1e-6, atolR=1e-8,
 						max_it=500, solver = TRBDF2())
@@ -17,10 +17,14 @@ end
 
 # fix calculated settings, in case one setting changes must propagate to others
 function recalc_settings(S)
-	tf_in = S.gr_type == 2 ?
-		circshift([[i] for i in 1:S.n],1)	:	# cycle_digraph, as in repressilator
-		# digraph w/tf_in_num in degree
-		[sort(sample(1:S.n, S.tf_in_num, replace=false)) for i in 1:S.n]  
+	tf_in = 
+  	if gr_type == 2
+	  tf_in = circshift([[i] for i in 1:n],1)		# cycle_digraph, as in repressilator
+  	elseif allow_self
+	  [sort(sample(1:n, tf_in_num, replace=false)) for i in 1:n] # digraph w/tf_in_num in degree
+  	else
+	  [sort(sample(1:n, tf_in_num, replace=false)) for i in 1:n] # digraph w/tf_in_num in degree
+  	end
 	
 	S = Settings(S; start_time = Dates.format(now(),"yyyymmdd_HHMMSS"),
 			git_vers = chomp(read(`git -C $(S.proj_dir) rev-parse --short HEAD`,String)),
@@ -55,17 +59,28 @@ train_frac = 1.0		# 1.0 means use all data for training
 n = 5
 m = 3					# repressilator is 3, vary as needed
 
-# with random_regular_digraph, row 1 has no out connections, so initially make
-# matrix of size n+1 then delete first row and column
 # no self connections by this algorithm
+allow_self = false		# allow self connections
 gr_type = 2				# 1 => random, 2 => cycle for use in matching repressilator 
 tf_in_num = 4			# should be <= n-1 if self avoided, <= if w/self
-@assert tf_in_num < n "tf_in_num ($tf_in_num) should be less than n ($n)"
+@assert tf_in_num <= n "allow_self and tf_in_num ($tf_in_num) greater than n ($n)"
+@assert (allow_self || tf_in_num < n) "!allow_self and tf_in_num ($tf_in_num) greater than n-1"
+# if (allow_self && tf_in_num > n)
+# 	exit("allow_self and tf_in_num ($tf_in_num) greater than n ($n)")
+# end
+# if (!allow_self && tf_in_num >= n)
+# 	exit("!allow_self and tf_in_num ($tf_in_num) greater than n-1 ($n)")
+# end
 
 # array of arrays, each entry array is the list of incoming TF connections for a gene
-tf_in = gr_type == 2 ?
-	circshift([[i] for i in 1:n],1)	:	# cycle_digraph, as in repressilator
+tf_in = 
+  if gr_type == 2
+	tf_in = circshift([[i] for i in 1:n],1)		# cycle_digraph, as in repressilator
+  elseif allow_self
 	[sort(sample(1:n, tf_in_num, replace=false)) for i in 1:n] # digraph w/tf_in_num in degree
+  else
+	[sort(sample(vcat(1:i-1,i+1:n) , tf_in_num, replace=false)) for i in 1:n] # no self
+  end
 
 opt_dummy_u0 = false	# optimize dummy init values instead of using rand values
 
