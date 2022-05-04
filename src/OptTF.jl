@@ -208,26 +208,30 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=false)
 			end
 		end
 		base = S.opt_dummy_u0 ? 0 : n				# if false, u0 is 2S.n, if true, u0 is S.m
-		p[ddim+1:ddim+m] .= 0.2 .* u0[base+1:base+m] # m_a
-		if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[base+1]) .* ones(n-m) end
+# 		p[ddim+1:ddim+m] .= 0.2 .* u0[base+1:base+m] # m_a
+# 		if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[base+1]) .* ones(n-m) end
+		# start with parameters the same for all loci
+		p[ddim+1:ddim+n] .= 0.2 .* u0[base+1] .* ones(n) # m_a
 		p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
 		p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
 		p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d
 	else
 		u0 .= vcat(zeros(n),[20.],zeros(n-1))
-		p[ddim+1:ddim+m] .= 10.0 .* ones(n)			# m_a
+		p[ddim+1:ddim+n] .= 10.0 .* ones(n)			# m_a
 		p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
 		p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
 		p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d		
 	end
 	
-	# ode_parse adds 1e-2 to rate parameters, so subtract here	
-	p[ddim+1:ddim+4n] .= p[ddim+1:ddim+4n] .- (1e-2 .* ones(4n))
+	# ode_parse adds 1e-2 to rate parameters, so subtract here
+	# multiply by 0.1 to slow down rate processes, otherwise so fast
+	# that equil achieved and maintained too strongly, so cannot fit fluctuations
+	p[ddim+1:ddim+4n] .= 0.1 .* p[ddim+1:ddim+4n] .- (1e-2 .* ones(4n))
 	
 	p[ddim+1:ddim+4n] .= [inverse_lin_sigmoid(p[i]/1e2,d,k1,k2) for i in ddim+1:ddim+4n]
 	
 	b = ddim+4n
-	p[b+1:b+n*s] .= 1e0 .* ones(n*s)			# k
+	p[b+1:b+n*s] .= 5e2 .* ones(n*s)			# k
 	p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/1e4,d,k1,k2) for i in b+1:b+n*s]
 	
 	b = ddim+4n+n*s
@@ -235,7 +239,9 @@ function init_ode_param(u0,S; noise=2e-3, start_equil=false)
 	p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/5e0,d,k1,k2) for i in b+1:b+n*s]
 	
 	b = ddim+4n+2n*s
-	p[b+1:b+n*N] .= 0.5 .* ones(n*N)			# a
+	# p[b+1:b+n*N] .= 0.5 .* ones(n*N)			# a
+	# use rand to provide more initial variation
+	p[b+1:b+n*N] .= rand(n*N)					# a
 	p[b+1:b+n*N] .= [inverse_lin_sigmoid(p[i],d,k1,k2) for i in b+1:b+n*N]
 	
 	b = ddim+4n+2*n*s+n*N
@@ -430,7 +436,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 					NeuralODE(dudt, (0.0,last_time), S.solver, saveat = ts, 
 						reltol = S.rtol, abstol = S.atol) :
 					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
-						(-000.0,last_time), p_init, saveat = ts,
+						(-00.0,last_time), p_init, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
@@ -463,7 +469,7 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		# lb=zeros(num_var), ub=1e3 .* ones(num_var),
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
 						 #lb=zeros(num_var), ub=1e3 .* ones(num_var),
 						 cb = callback, maxiters=S.max_it)
 	end

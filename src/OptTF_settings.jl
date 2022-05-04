@@ -2,8 +2,8 @@ module OptTF_settings
 using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, default_node, reset_rseed, recalc_settings
 
-default_ode() = Settings(allow_self = false, gr_type = 1, n=3, tf_in_num=2, rtol=1e-7, atol=1e-9,
-					adm_learn=0.02, train_frac=0.25, opt_dummy_u0 = true)
+default_ode() = Settings(allow_self = false, gr_type = 2, n=3, tf_in_num=1, rtol=1e-7, atol=1e-9,
+					adm_learn=0.02, train_frac=0.5, opt_dummy_u0 = true)
 default_node() = Settings(use_node=true, rtol=1e-3, atol=1e-4, rtolR=1e-6, atolR=1e-8,
 						max_it=500, solver = TRBDF2())
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
