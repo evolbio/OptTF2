@@ -1,11 +1,9 @@
 module OptTF_settings
 using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
-export Settings, default_ode, default_node, reset_rseed, recalc_settings
+export Settings, default_ode, reset_rseed, recalc_settings
 
 default_ode() = Settings(allow_self = false, gr_type = 2, n=3, tf_in_num=1, rtol=1e-7, atol=1e-9,
 					adm_learn=0.01, train_frac=0.33, opt_dummy_u0 = true)
-default_node() = Settings(use_node=true, rtol=1e-3, atol=1e-4, rtolR=1e-6, atolR=1e-8,
-						max_it=500, solver = TRBDF2())
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
 							actual_seed=set_rand_seed(false,rseed))
 
@@ -36,16 +34,12 @@ function recalc_settings(S)
 end
 
 # One can initialize and then modify settings as follows
-# S = default_node()	# default settings for NODE
 # S = Settings(S; layer_size=50, activate=3, [ADD OTHER OPTIONS AS NEEDED])
 # S = default_ode()		# default settings for ODE
 # S = Settings(S; opt_dummy_u0 = true, [ADD OTHER OPTIONS AS NEEDED])
 # See docs for Parameters.jl package
 
 @with_kw struct Settings
-
-use_node = false	# switch between NODE and ODE
-layer_size = 20		# size of layers for NODE
 
 # function to generate or load data for fitting
 f_data = generate_repressilator
@@ -54,7 +48,7 @@ f_data = generate_repressilator
 # truncates training data as train_data[train_data .<= train_frac*train_data[end]]
 train_frac = 1.0		# 1.0 means use all data for training
 
-# n => number of variables in NODE, for ODE n is # proteins w/n matching mRNA, for 2n
+# n => number of proteins w/n matching mRNA, for 2n
 # m is number of variables in target data, n>=m, with n-m number of dummy dimensions
 n = 5
 m = 3					# repressilator is 3, vary as needed
@@ -85,16 +79,16 @@ tf_in =
 opt_dummy_u0 = false	# optimize dummy init values instead of using rand values
 
 # Larger tolerances are faster but errors make gradient descent more challenging
-# However, fit is sensitive to tolerances, seems NODE may benefit from fluctuations
+# However, fit is sensitive to tolerances
 # with larger tolerances whereas ODE needs smoother gradient from smaller tolerances??
-rtol = 1e-10		# relative tolerance for solver, ODE -> ~1e-10, NODE -> ~1e-2 or -3
-atol = 1e-12		# absolute tolerance for solver, ODE -> ~1e-12, NODE -> ~1e-3 or -4
+rtol = 1e-10		# relative tolerance for solver, ODE -> ~1e-10 or a bit less
+atol = 1e-12		# absolute tolerance for solver, ODE -> ~1e-12 or a bit less
 rtolR = 1e-10		# relative tolerance for solver for refine_fit stages
 atolR = 1e-12		# absolute tolerance for solver for refine_fit stages
 adm_learn = 0.0005	# Adam rate, >=0.0002 for Tsit5, >=0.0005 for TRBDF2, change as needed
 max_it = 200		# max iterates for each incremental learning step
-					# try 200 for ODE, small tolerances, and Rodas4P solver
-					# and 500 for NODE, with larger tolerances and TRBDF2
+					# try 200 with small tolerances, and Rodas4P solver
+					# and 500 for larger tolerances and TRBDF2
 print_grad = false	# show gradient on terminal, requires significant overhead
 
 # parameter bounds: lower bound is zero for all parameters except
@@ -157,14 +151,6 @@ wt_incr = 1			# increment for i = 1:wt_incr:wt_steps, see above
 # and so need greater learning momentum to shake out of local minima ??
 
 solver = Rodas4P()
-
-# Activation function:
-# tanh seems to give good fit, perhaps best fit, and maybe overfit
-# however, gradient does not decline near best fit, may limit methods that
-# require small gradient near fixed point; identity fit not as good but
-# gradient declines properly near local optimum with BFGS()
-
-activate = 2	 # use one of 1 => identity, 2 => tanh, 3 => sigmoid, 4 => swish
 
 end # struct
 

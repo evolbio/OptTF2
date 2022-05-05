@@ -45,11 +45,7 @@ function generate_repressilator(S)
 		prot_dum = u0[1].*ones(S.n-S.m)
 		prot_init = vcat(u0,prot_dum)
 		mRNA_init = 0.1 .* prot_init
-		u0 = S.use_node ?
-			# vcat(u0,rand(S.n-S.m)) :					# random init
-			# vcat(rand(S.n),u0,rand(S.n-S.m))
-			prot_init : 
-			vcat(mRNA_init,prot_init)					# see OptTF.init_ode_param
+		u0 = vcat(mRNA_init,prot_init)					# see OptTF.init_ode_param
 	end
 	return data, data_diff, u0, tspan_save, tsteps_save
 end

@@ -4,6 +4,17 @@
 # All parameters and variables are non-negative. Each parameter has an upper bound
 # set in OptTF_settings. The rate parameters also have a lower bound, S.low_rate
 
+# To set bounds, the method is to allow the parameter vector used for optimization
+# to vary without bounds and to transform raw parameter values into parameters used
+# in ode! by parsing the parameters. Typically, each raw parameter maps directly 
+# to the used parameter over the range [low + d', hi - d'], where low and high are
+# the parameter bounds and d' = d(hi-low) is a zone near the boundaries that is
+# transformed by a sigmoid function. For example, a raw parameter p < low+d' is
+# transformed by a sigmoid function to map p into the range [low, low+d']. There
+# is also an inverse mapping from and ode parameter in [low,low+d'] to a raw
+# parameter, where, for example, as the used parameter approaches low, the raw
+# parameter becomes a large negative value. Similarly for the top of the range.
+
 # m message, p protein, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
 function ode_parse_p(p,S)
 	n = S.n

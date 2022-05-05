@@ -5,8 +5,6 @@ using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEqu
 include("OptTF_param.jl")
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq
 
-# CODE FOR NODE NOT COMPLETE, USE ODE ONLY UNTIL NODE COMPLETED
-
 # Variables may go negative, which throws error. Could add bounds
 # to constrain optimization. But for now sufficient just to rerun
 # with lower noise for parameters, or lower tolerances for solver
@@ -91,56 +89,41 @@ calc_f(f,P,y,S) =
 	[f(calc_v(getindex(y,S.tf_in[i]),P.k[i],P.h[i]),P.a[i],set_r(P.r[i],S.tf_in_num))
 			for i in 1:S.n]
 
+function ode!(du, u, p, t, S, f)
+	n = S.n
+	u_m = @view u[1:n]			# mRNA
+	u_p = @view u[n+1:2n]		# protein
+	P = ode_parse_p(p,S)
+	f_val = calc_f(f,P,u_p,S)
+	du[1:n] .= P.m_a .* f_val .- P.m_d .* u_m			# mRNA level
+	du[n+1:2n] .= P.p_a .* u_m .- P.p_d .* u_p			# protein level
+end
+
 # modified from FitODE.jl
 # m is number of protein dimensions for target pattern
 # n is number of protein dimensions
 # u_init for proteins taken from target data
 # for ode w/mRNA, u_init for all mRNA and for dummy proteins random or optimized
-# NODE has only proteins, NODE not completed or tested
 # TF ODE has n mRNA plus n proteins
 function setup_diffeq_func(S)
 	ddim_p = S.n - S.m		# dummy protein dimensions
 	ddim_all = ddim_p + S.n	# dummy proteins plus dummy mRNA
-	# activation function to create nonlinearity, identity is no change
-	activate = if (S.activate == 1) identity elseif (S.activate == 2) tanh
-						elseif (S.activate == 3) sigmoid else swish end
 	# If optimizing initial conditions for dummy dimensions, then for initial condition u0,
 	# dummy dimensions are first entries of p
 	d = 1e-2	# cutoff from boundaries at which change from linear to sigmoid
 	k1 = d*(1.0+exp(-10.0*d))
 	k2 = 10.0*(1.0-d) + log(d/(1.0-d))
-	predict_node_dummy(p, prob, u_init) =
-	  		Array(prob(vcat(u_init,(1e4.*linear_sigmoid.(p[1:ddim],d,k1,d2))), p[ddim+1:end]))
-	predict_node_nodummy(p, prob, u_init) = Array(prob(u_init, p))
+	max_u = S.rate / S.low_rate
 	predict_ode_dummy(p, prob, u_init) =
-			solve(prob, S.solver, u0=vcat((1e4.*linear_sigmoid.(p[1:S.n],d,k1,k2)),
-					u_init,(1e4.*linear_sigmoid.(p[S.n+1:ddim_all],d,k1,k2))),
+			solve(prob, S.solver, u0=vcat((max_u.*linear_sigmoid.(p[1:S.n],d,k1,k2)),
+					u_init,(max_u.*linear_sigmoid.(p[S.n+1:ddim_all],d,k1,k2))),
 					p=p[ddim_all+1:end])
 	predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
 
-	# For NODE, many simple options to build alternative network architecture, see SciML docs
-	if S.use_node
-		dudt = FastChain(FastDense(S.n, S.layer_size, activate), FastDense(S.layer_size, S.n))
-		ode! = nothing
-		predict = S.opt_dummy_u0 ?
-			predict_node_dummy :
-			predict_node_nodummy
-	else
-		dudt = nothing
-		function ode!(du, u, p, t, S, f)
-			n = S.n
-			u_m = @view u[1:n]			# mRNA
-			u_p = @view u[n+1:2n]		# protein
-			P = ode_parse_p(p,S)
-			f_val = calc_f(f,P,u_p,S)
-			du[1:n] .= P.m_a .* f_val .- P.m_d .* u_m			# mRNA level
-			du[n+1:2n] .= P.p_a .* u_m .- P.p_d .* u_p		# protein level
-		end
-		predict = S.opt_dummy_u0 ?
-			predict_ode_dummy :
-			predict_ode_nodummy
-	end
-	return dudt, ode!, predict
+	predict = S.opt_dummy_u0 ?
+		predict_ode_dummy :
+		predict_ode_nodummy
+	return predict
 end
 
 function callback(p, loss_val, S, L, pred_all;
@@ -162,24 +145,14 @@ function callback(p, loss_val, S, L, pred_all;
 		plot_type! = if show_lines plot! else scatter! end
 		if !show_all
 			# plot current prediction against data, show only target proteins
-			pred = if S.use_node @view pred_all[1:S.m,:] else @view pred_all[S.n+1:S.n+S.m,:] end
+			pred = @view pred_all[S.n+1:S.n+S.m,:]
 			dim = length(pred[:,1])
 			plt = plot(size=(600,400*dim), layout=(dim,1),left_margin=12px)
 			for i in 1:dim
 				plot_type!(ts, L.data[i,1:len], label = "", color=mma[1], subplot=i)
 				plot_type!(plt, ts, pred[i,:], label = "", color=mma[2], subplot=i)
 			end
-		elseif S.use_node	# NODE and show_all, NOT TESTED YET
-			dim = length(pred_all[:,1])
-			plt = plot(size=(600,250*dim), layout=(dim,1),left_margin=12px)
-			for i in 1:dim
-				# proteins only, no mRNA in NODE
-				if (i <= S.m) # target data
-					plot_type!(ts, L.data[i:len], label = "", color=mma[1], subplot=i)
-				end
-				plot_type!(plt, ts, pred_all[i,:], label = "", color=mma[2], subplot=i)
-			end			
-		else				# ODE and show_all
+		else
 			dim = length(pred_all[:,1])
 			plt = plot(size=(1200,250*(dim ÷ 2)), layout=((dim ÷ 2),2),left_margin=12px)
 			for i in 1:dim
@@ -199,21 +172,11 @@ end
 function loss(p, S, L)
 	pred_all = L.predict(p, L.prob, L.u0)
 	# pick out tracked proteins
-	pred = if S.use_node @view pred_all[1:S.m,:] else @view pred_all[S.n+1:S.n+S.m,:] end
+	pred = @view pred_all[S.n+1:S.n+S.m,:]
 	pred_length = length(pred[1,:])
 	if pred_length != length(L.w[1,:]) println("Mismatch") end
 	# add cost for concentrations over 1e3
 	loss = sum(abs2, L.w[:,1:pred_length] .* (L.data[:,1:pred_length] .- pred))
-	
-	# add loss amount for differences in slopes by first diffs
-	# probably not useful because if difficulty fitting with MSE loss, using
-	# slopes will typically not fix the difficulty
-	
-	# pred_diff = pred[:,2:end] - pred[:,1:end-1]
-	# loss_diff = sum(abs2, L.w[:,1:pred_length-1] .*
-	#					(L.data_diff[:,1:pred_length-1] .- pred_diff[:,1:pred_length-1]))
-	# loss = loss + 0e3*loss_diff
-
 	return loss, S, L, pred_all
 end
 
@@ -235,7 +198,7 @@ end
 function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 	S.set_rseed(new_rseed, S.preset_seed)
 	data, data_diff, u0, tspan, tsteps = S.f_data(S);
-	dudt, ode!, predict = setup_diffeq_func(S);
+	predict = setup_diffeq_func(S);
 	
 	# If using subset of data for training then keep original and truncate tsteps
 	tsteps_all = copy(tsteps)
@@ -246,9 +209,8 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 	end
 	
 	beta_a = 1:S.wt_incr:S.wt_steps
-	if !S.use_node p_init = init_ode_param(u0,S; noise=noise) end;
+	p = init_ode_param(u0,S; noise=noise)
 	f = generate_tf_activation_f(S.tf_in_num)
-	num_var = S.use_node ? S.n : 2S.n
 
 	local result
 	for i in 1:length(beta_a)
@@ -257,24 +219,16 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		last_time = tsteps[length(w[1,:])]
 		ts = tsteps[tsteps .<= last_time]
 		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
-		prob = S.use_node ?
-					NeuralODE(dudt, (0.0,last_time), S.solver, saveat = ts, 
-						reltol = S.rtol, abstol = S.atol) :
-					ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
-						(-00.0,last_time), p_init, saveat = ts,
+		prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
+						(-00.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
-		if (i == 1)
-			p = S.use_node ? prob.p : p_init
-			if S.opt_dummy_u0 && S.use_node p = vcat(randn(S.n-S.m),p) end
-		else
+		if (i > 1)
 			p = result.u
-			if !S.use_node
-				ddim = S.opt_dummy_u0 ? 2S.n - S.m : 0
-				test_param(p[ddim+1:end],S)		# check that params are within bounds
-			end
+			ddim = S.opt_dummy_u0 ? 2S.n - S.m : 0
+			test_param(p[ddim+1:end],S)		# check that params are within bounds
 		end
 		
 		# use to look at plot of initial conditions, set to false for normal use
@@ -291,11 +245,11 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		# ForwardDiff more reliable but may be slower
 		
 		# For constraints on variables, must use AutoForwardDiff() and add
-		# lb=zeros(num_var), ub=1e3 .* ones(num_var),
+		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
 						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
-						 #lb=zeros(num_var), ub=1e3 .* ones(num_var),
+						 #lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 						 cb = callback, maxiters=S.max_it)
 	end
 end
@@ -306,19 +260,13 @@ function tmp()
 	
 	# To prepare for final fitting and calculations, must set prob to full training
 	# period with tspan and tsteps and then redefine loss_args values in L
-	prob = S.use_node ?
-			NeuralODE(dudt, tspan, S.solver, saveat = tsteps, 
-					reltol = S.rtolR, abstol = S.atolR) :
-			ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S.n, S.nsqr), u0,
-					tspan, p_init, saveat = tsteps, reltol = S.rtolR, abstol = S.atolR)
+	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
+					tspan, p, saveat = tsteps, reltol = S.rtolR, abstol = S.atolR)
 	if (S.train_frac == 1.0)
 		prob_all = prob
 	else
-		prob_all = S.use_node ?
-			NeuralODE(dudt, tspan_all, S.solver, saveat = tsteps_all, 
-					reltol = S.rtolR, abstol = S.atolR) :
-			ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S.n, S.nsqr), u0, tspan_all, 
-					p_init, saveat = tsteps_all, reltol = S.rtolR, abstol = S.atolR)
+		prob_all = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0, tspan_all, 
+					p, saveat = tsteps_all, reltol = S.rtolR, abstol = S.atolR)
 		
 	end
 	w = ones(2,length(tsteps))
