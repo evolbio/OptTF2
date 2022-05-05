@@ -3,7 +3,7 @@ using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, default_node, reset_rseed, recalc_settings
 
 default_ode() = Settings(allow_self = false, gr_type = 2, n=3, tf_in_num=1, rtol=1e-7, atol=1e-9,
-					adm_learn=0.02, train_frac=0.5, opt_dummy_u0 = true)
+					adm_learn=0.01, train_frac=0.33, opt_dummy_u0 = true)
 default_node() = Settings(use_node=true, rtol=1e-3, atol=1e-4, rtolR=1e-6, atolR=1e-8,
 						max_it=500, solver = TRBDF2())
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
@@ -96,6 +96,18 @@ max_it = 200		# max iterates for each incremental learning step
 					# try 200 for ODE, small tolerances, and Rodas4P solver
 					# and 500 for NODE, with larger tolerances and TRBDF2
 print_grad = false	# show gradient on terminal, requires significant overhead
+
+# parameter bounds: lower bound is zero for all parameters except
+# rates m_a, m_d, p_a, and p_d, which have lower bound of
+low_rate = 1e-2
+# upper bounds
+rate 	= 1e2
+k		= 1e4
+h		= 5e0
+a		= 1e0
+r		= 1e1
+p_max	= [rate,k,h,a,r]
+
 
 start_time = Dates.format(now(),"yyyymmdd_HHMMSS")
 proj_dir = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF"
