@@ -20,6 +20,8 @@ mma = [RGB(0.3684,0.50678,0.7098),RGB(0.8807,0.61104,0.14204),
 
 ####################################################################
 
+load_data_warning = true
+
 @with_kw struct loss_args
 	u0
 	prob				# problem to send to solve
@@ -195,7 +197,7 @@ function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc)
 end
 
 # new_rseed true uses new seed, false reuses preset_seed
-function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
+function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 	S.set_rseed(new_rseed, S.preset_seed)
 	data, data_diff, u0, tspan, tsteps = S.f_data(S);
 	predict = setup_diffeq_func(S);
@@ -249,15 +251,8 @@ function fit_diffeq(S; noise = 0.05, new_rseed = S.generate_rand_seed)
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
 						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
-						 #lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 						 cb = callback, maxiters=S.max_it)
 	end
-end
-
-#############################################################
-
-function tmp()
-	
 	# To prepare for final fitting and calculations, must set prob to full training
 	# period with tspan and tsteps and then redefine loss_args values in L
 	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
@@ -269,12 +264,72 @@ function tmp()
 					p, saveat = tsteps_all, reltol = S.rtolR, abstol = S.atolR)
 		
 	end
-	w = ones(2,length(tsteps))
-	L = loss_args(u0,prob,predict,ode_data,ode_data_orig,tsteps,w)
+	w = ones(S.m,length(tsteps))
+	L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
 	A = all_time(prob_all, tsteps_all)
 	p_opt = refine_fit(result.u, S, L)
 	return p_opt, L, A
 end
 
+#############################################################
+
+function refine_fit(p, S, L; rate_div=5.0, iter_mult=2.0)
+	println("\nFinal round of fitting, using full time series in given data")
+	println("Last step of previous fit did not fully weight final pts in series")
+	println("Reducing ADAM learning rate by ", rate_div,
+				" and increasing iterates by ", iter_mult, "\n")
+	rate = S.adm_learn / rate_div
+	iter = S.max_it * iter_mult
+	result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
+						 p, ADAM(rate); cb = callback, maxiters=iter)
+	return result.u
+end
+
+function refine_fit_bfgs(p, S, L) 
+	println("\nBFGS sometimes suffers instability or gives other warnings")
+	println("If so, then abort and do not use result\n")
+	result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
+						 p, BFGS(); cb = callback, maxiters=S.max_it)
+	return result.u
+end
+
+# particular data saved changes with versions of program
+# could send tuple rather than naming variables but helps to have
+# named variables here to check that currently required variables are
+# saved
+save_data(p, S, L, L_all, loss_v, pred; file=S.out_file) =
+			jldsave(file; p, S, L, L_all, loss_v, pred)
+
+# jld2 stores data as Dict with keys as strings
+# to return named tuple, must first transform to dict with keys as symbols
+#	see https://www.reddit.com/r/Julia/comments/8aw93w
+# then use ... operator to transform dict w/symbol keys to named tuple
+#	see https://discourse.julialang.org/t/10899/8?page=2
+# Disadvantage of loading whatever is saved is that no checking for particular
+# variables is made, so caller must check that required variables present
+function load_data(file)
+	global load_data_warning
+	dt_string_keys = load(file)
+	dt_symbol_keys = Dict()
+	for (k,v) in dt_string_keys
+    	dt_symbol_keys[Symbol(k)] = v
+	end
+	if load_data_warning
+		println("\nWarning may occur if loaded data struct not defined or")
+		println("differs from current definition of that structure. Check keys")
+		println("in returned named tuple by using keys() on returned value. Check")
+		println("if a required key is missing and adjust accordingly.\n")
+		load_data_warning = false
+	end
+	(; dt_symbol_keys...)
+end
+
+# Can check for specific keys in load by this function, if required key
+# is missing, should throw an error
+function load_data_old(file)
+	dt = load(file)
+	(p = dt["p"], S = dt["S"], L = dt["L"], L_all = dt["L_all"],
+						loss_v = dt["loss_v"], pred = dt["pred"])
+end
 
 end # module

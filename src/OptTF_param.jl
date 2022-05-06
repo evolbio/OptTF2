@@ -104,7 +104,7 @@ end
 # All params have min value at 0 except rates which are min at 1e-2, all params have max vals
 # see ode_parse_p()
 
-function init_ode_param(u0,S; noise=2e-3, start_equil=false)
+function init_ode_param(u0,S; noise=1e-1, start_equil=false)
 	@assert length(u0) == (S.opt_dummy_u0 ? S.m : 2S.n)
 	num_p = ode_num_param(S)
 	p = zeros(num_p)
