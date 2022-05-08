@@ -16,7 +16,7 @@ export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_
 ####################################################################
 # colors, see MMAColors.jl in my private modules
 
-const mma = [RGB(0.3684,0.50678,0.7098),RGB(0.8807,0.61104,0.14204),
+mma = [RGB(0.3684,0.50678,0.7098),RGB(0.8807,0.61104,0.14204),
 			RGB(0.56018,0.69157,0.19489), RGB(0.92253,0.38563,0.20918)];
 
 ####################################################################
@@ -251,7 +251,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
 						 cb = callback, maxiters=S.max_it)
 	end
 	# To prepare for final fitting and calculations, must set prob to full training

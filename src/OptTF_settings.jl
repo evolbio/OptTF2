@@ -15,13 +15,15 @@ end
 
 # fix calculated settings, in case one setting changes must propagate to others
 function recalc_settings(S)
+	@assert false "Recalc does not include ode_parse_p components, \
+		reset by modifying default_ode"
 	tf_in = 
-  	if gr_type == 2
-	  tf_in = circshift([[i] for i in 1:n],1)		# cycle_digraph, as in repressilator
-  	elseif allow_self
-	  [sort(sample(1:n, tf_in_num, replace=false)) for i in 1:n] # digraph w/tf_in_num in degree
+  	if S.gr_type == 2
+	  circshift([[i] for i in 1:S.n],1)		# cycle_digraph, as in repressilator
+  	elseif S.allow_self
+	  [sort(sample(1:S.n, S.tf_in_num, replace=false)) for i in 1:S.n] # digraph w/tf_in_num in degree
   	else
-	  [sort(sample(1:n, tf_in_num, replace=false)) for i in 1:n] # digraph w/tf_in_num in degree
+	  [sort(sample(1:S.n, S.tf_in_num, replace=false)) for i in 1:S.n] # digraph w/tf_in_num in degree
   	end
 	
 	S = Settings(S; start_time = Dates.format(now(),"yyyymmdd_HHMMSS"),
@@ -30,6 +32,7 @@ function recalc_settings(S)
 			wt_steps = Int(ceil(log(500)/log(S.wt_base))))
 	S = Settings(S; tf_in=tf_in)
 	S = Settings(S; out_file = "/Users/steve/Desktop/" * S.start_time * ".jld2")
+	
 	return S
 end
 
@@ -52,6 +55,7 @@ train_frac = 1.0		# 1.0 means use all data for training
 # m is number of variables in target data, n>=m, with n-m number of dummy dimensions
 n = 5
 m = 3					# repressilator is 3, vary as needed
+@assert n >= m
 
 # no self connections by this algorithm
 allow_self = false		# allow self connections
@@ -101,6 +105,22 @@ h		= 5e0
 a		= 1e0
 r		= 1e1
 p_max	= [rate,k,h,a,r]
+
+# values needed in ode_parse_p()
+s = tf_in_num
+N = 2^s
+d = 1e-2
+k1 = d*(1.0+exp(-10.0*d))
+k2 = 10.0*(1.0-d) + log(d/(1.0-d))
+ddim = opt_dummy_u0 ? 2*n - m : 0
+num_param = ddim+4n+2*n*s+n*N+n*(N - (s+1))
+p_min = calc_pmin(n,num_param,ddim,low_rate)
+p_mult = calc_pmult(n,s,N,p_min,p_max)
+bk = 4n
+bh = bk+n*s
+ba = bh+n*s
+br = ba+n*N
+ri = N - (s+1)
 
 
 start_time = Dates.format(now(),"yyyymmdd_HHMMSS")
@@ -153,5 +173,20 @@ wt_incr = 1			# increment for i = 1:wt_incr:wt_steps, see above
 solver = Rodas4P()
 
 end # struct
+
+function calc_pmin(n,pnum,ddim,low_rate)
+	p_min = zeros(pnum-ddim)
+	p_min[1:4n] .= low_rate .* ones(4n)
+	p_min
+end
+
+function calc_pmult(n,s,N,pmin,p_max)
+	p_dim = [4n,n*s,n*s,n*N,n*(N-(s+1))]
+	p_mult = []
+	for i in 1:length(p_dim)
+		append!(p_mult, p_max[i] .* ones(p_dim[i]))
+	end
+	p_mult
+end
 
 end	# module

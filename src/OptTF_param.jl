@@ -18,40 +18,32 @@
 # m message, p protein, _a growth, _d decay, k dissociation, h hill coeff, r cooperativity
 function ode_parse_p(p,S)
 	n = S.n
-	s = S.tf_in_num
-	N = 2^s
+	s = S.s
+	N = S.N
 	# transform parameter values for gradients into values used for ode
-	# min val for rates is 1e-2, 0 for all others, max values vary, see p_max
+	# min val for rates is S.d=1e-2, 0 for all others, max values vary, see p_max
 	# see linear_sigmoid() for transform of gradient params to ode params
-	d = 1e-2	# cutoff from boundaries at which change from linear to sigmoid
-	k1 = d*(1.0+exp(-10.0*d))
-	k2 = 10.0*(1.0-d) + log(d/(1.0-d))
-	pp = linear_sigmoid.(p, d, k1, k2)	# this normalizes on [0,1] with linear_sigmoid pattern
-	# length and max vals for rates, k, h, a, r
-	p_dim = [4n,n*s,n*s,n*N,n*(N-(s+1))]
-	p_min = zeros(length(p))
-	p_min[1:4n] = S.low_rate .* ones(4n)
-	p_mult = []
-	for i in 1:length(p_dim)
-		append!(p_mult, S.p_max[i] .* ones(p_dim[i]))
-	end
+	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] with linear_sigmoid pattern
 	# set min on rates m_a, m_d, p_a, p_d, causes top to be 1e2 + 1e-2
-	ppp = (pp .* p_mult) .+ p_min
+	ppp = (pp .* S.p_mult) .+ S.p_min
 	m_a = @view ppp[1:n]			# n
 	m_d = @view ppp[n+1:2n]			# n
 	p_a = @view ppp[2n+1:3n]		# n
 	p_d = @view ppp[3n+1:4n]		# n
 	
-	b = 4n
-	k = [@view ppp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
-	b = 4n+n*s
-	h = [@view ppp[b+1+(i-1)*s:b+i*s] for i in 1:n]		# ns
-	b = 4n+2*n*s
-	a = [@view ppp[b+1+(i-1)*N:b+i*N] for i in 1:n]		# nN, [0,1] for TF activation
-	b = 4n+2*n*s+n*N
-	ri = N - (s+1)
-	r = [@view ppp[b+1+(i-1)*ri:b+i*ri] for i in 1:n]	# n(N-(s+1))
-	@assert length(ppp) == b + n*ri
+	# preallocating faster than,e.g., k = [@view ppp[S.bk+1+(i-1)*s:S.bk+i*s] for i in 1:n]
+ 	k = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
+ 	h = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
+ 	a = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
+ 	r = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
+ 	for i in 1:n
+ 		k[i] = @view ppp[S.bk+1+(i-1)*s:S.bk+i*s]			# ns
+ 		h[i] = @view ppp[S.bh+1+(i-1)*s:S.bh+i*s]			# ns
+ 		a[i] = @view ppp[S.ba+1+(i-1)*N:S.ba+i*N]			# nN, [0,1] for TF activation
+ 		r[i] = @view ppp[S.br+1+(i-1)*S.ri:S.br+i*S.ri]		# n(N-(s+1))
+ 	end
+
+	@assert length(ppp) == S.br + n*S.ri
 	# return a named tuple
 	(;m_a, m_d, p_a, p_d, k, h, a, r)			# return named tuple
 end
@@ -106,7 +98,7 @@ end
 
 function init_ode_param(u0,S; noise=1e-1, start_equil=false)
 	@assert length(u0) == (S.opt_dummy_u0 ? S.m : 2S.n)
-	num_p = ode_num_param(S)
+	num_p = S.num_param
 	p = zeros(num_p)
 	n = S.n
 	m = S.m
@@ -177,15 +169,3 @@ function init_ode_param(u0,S; noise=1e-1, start_equil=false)
 	p .= p .* (1.0 .+ noise.*randn(num_p))
 	return p
 end
-
-function ode_num_param(S)
-	n = S.n
-	s = S.tf_in_num
-	@assert n >= S.m
-	@assert s <= n
-	N = 2^s
-	ri = N - (s+1)
-	ddim = S.opt_dummy_u0 ? 2*n - S.m : 0
-	return ddim+4n+2*n*s+n*N+n*ri
-end
-
