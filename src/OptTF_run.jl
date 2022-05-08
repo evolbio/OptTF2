@@ -6,7 +6,7 @@ S = default_ode();
 # L is struct that includes u0, ode_data, tsteps, see struct loss_args for other parts
 # A is struct that includes tsteps_all and prob_all, used if S.train_frac < 1 that
 # splits data into initial training period and later period used to compare w/prediction
-p_opt1,L,A =  = fit_diffeq(S;noise=0.1)
+p_opt1,L,A  = fit_diffeq(S;noise=0.1);
 
 # If using a subset of data for training, then need L_all with full time period for all data
 # L always refers to training period, which may or may not be all time steps
@@ -47,3 +47,12 @@ keys(dt_test)
 
 # To use following steps, move saved out_file to proj_output using 
 # example in following steps
+
+###################################################################
+# Look at optimized parameters
+
+proj_output = S.proj_dir * "/output/";
+file = "repress-3-2_1.jld2"; 				# fill this in with desired file name
+dt = load_data(proj_output * file);
+PP=ode_parse_p(dt.p[2S.n-S.m+1:end],S);
+

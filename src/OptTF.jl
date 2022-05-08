@@ -3,7 +3,8 @@ module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
 	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures
 include("OptTF_param.jl")
-export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq
+export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
+			refine_fit_bfgs, refine_fit, loss, save_data, load_data, ode_parse_p
 
 # Variables may go negative, which throws error. Could add bounds
 # to constrain optimization. But for now sufficient just to rerun
@@ -15,7 +16,7 @@ export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq
 ####################################################################
 # colors, see MMAColors.jl in my private modules
 
-mma = [RGB(0.3684,0.50678,0.7098),RGB(0.8807,0.61104,0.14204),
+const mma = [RGB(0.3684,0.50678,0.7098),RGB(0.8807,0.61104,0.14204),
 			RGB(0.56018,0.69157,0.19489), RGB(0.92253,0.38563,0.20918)];
 
 ####################################################################
@@ -280,8 +281,8 @@ function refine_fit(p, S, L; rate_div=5.0, iter_mult=2.0)
 				" and increasing iterates by ", iter_mult, "\n")
 	rate = S.adm_learn / rate_div
 	iter = S.max_it * iter_mult
-	result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(rate); cb = callback, maxiters=iter)
+	result = DiffEqFlux.sciml_train(p -> loss(p,S,L), p, ADAM(rate),
+						GalacticOptim.AutoZygote(); cb = callback, maxiters=iter)
 	return result.u
 end
 
