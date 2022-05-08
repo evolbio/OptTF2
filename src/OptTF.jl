@@ -251,7 +251,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
 						 cb = callback, maxiters=S.max_it)
 	end
 	# To prepare for final fitting and calculations, must set prob to full training

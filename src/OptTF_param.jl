@@ -31,17 +31,14 @@ function ode_parse_p(p,S)
 	p_a = @view ppp[2n+1:3n]		# n
 	p_d = @view ppp[3n+1:4n]		# n
 	
-	# preallocating faster than,e.g., k = [@view ppp[S.bk+1+(i-1)*s:S.bk+i*s] for i in 1:n]
- 	k = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
- 	h = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
- 	a = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
- 	r = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
- 	for i in 1:n
- 		k[i] = @view ppp[S.bk+1+(i-1)*s:S.bk+i*s]			# ns
- 		h[i] = @view ppp[S.bh+1+(i-1)*s:S.bh+i*s]			# ns
- 		a[i] = @view ppp[S.ba+1+(i-1)*N:S.ba+i*N]			# nN, [0,1] for TF activation
- 		r[i] = @view ppp[S.br+1+(i-1)*S.ri:S.br+i*S.ri]		# n(N-(s+1))
- 	end
+	k = [@view ppp[S.bk+1+(i-1)*s:S.bk+i*s] for i in 1:n]		# ns
+	h = [@view ppp[S.bh+1+(i-1)*s:S.bh+i*s] for i in 1:n]		# ns
+	a = [@view ppp[S.ba+1+(i-1)*N:S.ba+i*N] for i in 1:n]		# nN, [0,1] for TF activation
+	r = [@view ppp[S.br+1+(i-1)*S.ri:S.br+i*S.ri] for i in 1:n]	# n(N-(s+1))
+	
+	# preallocating is faster but fails with AutoDiff. For example
+	# k = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
+	# for i in 1:n  k[i] = @view ppp[S.bk+1+(i-1)*s:S.bk+i*s]  end
 
 	@assert length(ppp) == S.br + n*S.ri
 	# return a named tuple
