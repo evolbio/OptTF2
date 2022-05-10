@@ -91,11 +91,8 @@ end
 # get full array of f values, for f=generate_tf_activation_f(S.tf_in_num) and
 # p as parameters and y as full array of TF concentrations, S as settings
 # see OptTF_param.ode_parse_p(p,S) for parameter extraction
-# no longer using ode_parse_p because it is slow, see git version for original
-calc_f_orig(f,P,y,S) = 
-	[f(calc_v(getindex(y,S.tf_in[i]),P.k[i],P.h[i]),P.a[i],set_r(P.r[i],S.tf_in_num))
-			for i in 1:S.n]
-
+# no longer using ode_parse_p because it is slow, see git version 5ca1483 for original
+# of calc_f and ode!
 calc_f(f,p,y,S) = 
 	[@views f(
 	 calc_v(getindex(y,S.tf_in[i]),p[S.bk+1+(i-1)*S.s:S.bk+i*S.s],p[S.bh+1+(i-1)*S.s:S.bh+i*S.s]),
@@ -119,16 +116,6 @@ function ode!(du, u, p, t, S, f)
 	
 	@views du[1:n] .= m_a .* f_val .- m_d .* u_m		# mRNA level
 	@views du[n+1:2n] .= p_a .* u_m .- p_d .* u_p		# protein level
-end
-
-function ode_orig!(du, u, p, t, S, f)
-	n = S.n
-	u_m = @view u[1:n]			# mRNA
-	u_p = @view u[n+1:2n]		# protein
-	P = ode_parse_p(p,S)
-	f_val = calc_f(f,P,u_p,S)
-	du[1:n] .= P.m_a .* f_val .- P.m_d .* u_m			# mRNA level
-	du[n+1:2n] .= P.p_a .* u_m .- P.p_d .* u_p			# protein level
 end
 
 # modified from FitODE.jl
