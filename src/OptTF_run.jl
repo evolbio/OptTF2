@@ -52,7 +52,9 @@ keys(dt_test)
 # Look at optimized parameters
 
 proj_output = S.proj_dir * "/output/";
-file = "repress-3-2_1.jld2"; 				# fill this in with desired file name
+file = "repress-3-2_2.jld2"; 				# fill this in with desired file name
 dt = load_data(proj_output * file);
 PP=ode_parse_p(dt.p[2S.n-S.m+1:end],S);
 
+# plot final result
+OptTF.callback(dt.p, dt.loss_v, dt.S, dt.L, dt.pred)

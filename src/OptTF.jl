@@ -289,8 +289,11 @@ end
 function refine_fit_bfgs(p, S, L) 
 	println("\nBFGS sometimes suffers instability or gives other warnings")
 	println("If so, then abort and do not use result\n")
+	println("In this case, BFGS fails as do most optimizers in Optim.jl,\n\
+					\tso using NelderMead\n")
 	result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, BFGS(); cb = callback, maxiters=S.max_it)
+						# cannot get BFGS() to work, try NelderMead
+						p, Optim.NelderMead(); cb = callback, maxiters=S.max_it)
 	return result.u
 end
 
