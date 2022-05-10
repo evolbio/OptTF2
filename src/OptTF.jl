@@ -89,12 +89,39 @@ function calc_v(y, k, h)
 end
 
 # get full array of f values, for f=generate_tf_activation_f(S.tf_in_num) and
-# P = ode_parse_p(p,S) and y as full array of TF concentrations, S as settings
-calc_f(f,P,y,S) = 
+# p as parameters and y as full array of TF concentrations, S as settings
+# see OptTF_param.ode_parse_p(p,S) for parameter extraction
+# no longer using ode_parse_p because it is slow, see git version for original
+calc_f_orig(f,P,y,S) = 
 	[f(calc_v(getindex(y,S.tf_in[i]),P.k[i],P.h[i]),P.a[i],set_r(P.r[i],S.tf_in_num))
 			for i in 1:S.n]
 
+calc_f(f,p,y,S) = 
+	[@views f(
+	 calc_v(getindex(y,S.tf_in[i]),p[S.bk+1+(i-1)*S.s:S.bk+i*S.s],p[S.bh+1+(i-1)*S.s:S.bh+i*S.s]),
+	 p[S.ba+1+(i-1)*S.N:S.ba+i*S.N],
+	 set_r(p[S.br+1+(i-1)*S.ri:S.br+i*S.ri],S.tf_in_num)) for i in 1:S.n]
+
 function ode!(du, u, p, t, S, f)
+	n = S.n
+	u_m = @view u[1:n]			# mRNA
+	u_p = @view u[n+1:2n]		# protein
+	
+	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] with linear_sigmoid pattern
+	# set min on rates m_a, m_d, p_a, p_d, causes top to be 1e2 + 1e-2
+	ppp = (pp .* S.p_mult) .+ S.p_min
+
+	m_a = @view ppp[1:n]
+	m_d = @view ppp[n+1:2n]
+	p_a = @view ppp[2n+1:3n]
+	p_d = @view ppp[3n+1:4n]
+	f_val = calc_f(f,ppp,u_p,S)
+	
+	@views du[1:n] .= m_a .* f_val .- m_d .* u_m		# mRNA level
+	@views du[n+1:2n] .= p_a .* u_m .- p_d .* u_p		# protein level
+end
+
+function ode_orig!(du, u, p, t, S, f)
 	n = S.n
 	u_m = @view u[1:n]			# mRNA
 	u_p = @view u[n+1:2n]		# protein
