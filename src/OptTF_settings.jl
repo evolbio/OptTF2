@@ -2,7 +2,7 @@ module OptTF_settings
 using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, reset_rseed, recalc_settings
 
-default_ode() = Settings(allow_self = false, gr_type = 1, n=3, tf_in_num=2, rtol=1e-7, atol=1e-9,
+default_ode() = Settings(allow_self = false, gr_type = 1, n=8, tf_in_num=5, rtol=1e-7, atol=1e-9,
 					adm_learn=0.01, train_frac=0.4, opt_dummy_u0 = true)
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
 							actual_seed=set_rand_seed(false,rseed))
@@ -180,7 +180,7 @@ function calc_pmin(n,pnum,ddim,low_rate)
 	p_min
 end
 
-function calc_pmult(n,s,N,pmin,p_max)
+function calc_pmult(n,s,N,pmin,p_max)::Vector{Float64}
 	p_dim = [4n,n*s,n*s,n*N,n*(N-(s+1))]
 	p_mult = []
 	for i in 1:length(p_dim)

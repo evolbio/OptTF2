@@ -115,9 +115,9 @@ function init_ode_param(u0,S; noise=1e-1, start_equil=false)
 			p[1:m] .= [inverse_lin_sigmoid(0.1*u0[i]/1e4,d,k1,k2) for i in 1:m]					
 			if n > m
 				# n-m dummy mRNA, 0.1*u0[1]
-				p[m+1:n] .= [inverse_lin_sigmoid(0.1*u0[1]/1e4,d,k1,k2) for i in 1:m+1:n]
+				p[m+1:n] .= [inverse_lin_sigmoid(0.1*u0[1]/1e4,d,k1,k2) for i in m+1:n]
 				# n-m dummy proteins set to u0[1]
-				p[n+1:2n-m] .= [inverse_lin_sigmoid(u0[1]/1e4,d,k1,k2) for i in 1:n+1:2n-m]
+				p[n+1:2n-m] .= [inverse_lin_sigmoid(u0[1]/1e4,d,k1,k2) for i in n+1:2n-m]
 			end
 		end
 		base = S.opt_dummy_u0 ? 0 : n				# if false, u0 is 2S.n, if true, u0 is S.m

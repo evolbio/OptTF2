@@ -81,9 +81,11 @@ end
 trunc_zero(x) = x < 0 ? 0. : x
 set_r(r,s) = vcat(ones(s+1),r)
 function calc_v(y, k, h)
-	# println("y, k, h sizes = ", length(y), " ", length(k), " ", length(h))
 	y .= trunc_zero.(y)
-	[(y[j]/k[j])^h[j] for j in 1:length(h)]
+	# println("y, k, h sizes = ", length(y), " ", length(k), " ", length(h))
+	# println(typeof(y), " ", typeof(k), " ", typeof(h))
+# 	[(y[j]/k[j])^h[j] for j in 1:length(h)]
+	(y ./ k).^h
 end
 
 # get full array of f values, for f=generate_tf_activation_f(S.tf_in_num) and
