@@ -266,6 +266,10 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
 						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
 						 cb = callback, maxiters=S.max_it)
+		
+		iter = @sprintf "_%02d" i
+		tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"
+		jldsave(tmp_file; result.u, S, L)
 	end
 	# To prepare for final fitting and calculations, must set prob to full training
 	# period with tspan and tsteps and then redefine loss_args values in L

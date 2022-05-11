@@ -44,9 +44,14 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
+f_name = "repress-3-2_3.jld2"
+mv(S.out_file, S.proj_dir * "/output/" * f_name)
+# then delete temporary files
+tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
+rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 
 # To use following steps, move saved out_file to proj_output using 
-# example in following steps
+# example in following steps for naming convention
 
 ###################################################################
 # Look at optimized parameters
