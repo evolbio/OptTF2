@@ -79,25 +79,22 @@ end
 # calc_vv(y, k, h) = begin println(length(y), " ", length(k), " ", length(h)); [(y[j]/k[j])^h[j] for j in 1:length(h)] end
 
 trunc_zero(x) = x < 0 ? 0. : x
-set_r(r,s) = vcat(ones(s+1),r)
-function calc_v(y, k, h)
-	y .= trunc_zero.(y)
-	# println("y, k, h sizes = ", length(y), " ", length(k), " ", length(h))
-	# println(typeof(y), " ", typeof(k), " ", typeof(h))
-# 	[(y[j]/k[j])^h[j] for j in 1:length(h)]
-	(y ./ k).^h
-end
+set_r(r,s) = vcat(ones(s+1),r)	# pasting r onto ones for cases of single binding
+f_range(base, length, i) = base+1+(i-1)*length:base+i*length # much faster than direct indexing
+calc_v(y, k, h) = (y ./ k).^h
 
 # get full array of f values, for f=generate_tf_activation_f(S.tf_in_num) and
 # p as parameters and y as full array of TF concentrations, S as settings
 # see OptTF_param.ode_parse_p(p,S) for parameter extraction
 # no longer using ode_parse_p because it is slow, see git version 5ca1483 for original
 # of calc_f and ode!
-calc_f(f,p,y,S) = 
-	[@views f(
-	 calc_v(getindex(y,S.tf_in[i]),p[S.bk+1+(i-1)*S.s:S.bk+i*S.s],p[S.bh+1+(i-1)*S.s:S.bh+i*S.s]),
-	 p[S.ba+1+(i-1)*S.N:S.ba+i*S.N],
-	 set_r(p[S.br+1+(i-1)*S.ri:S.br+i*S.ri],S.tf_in_num)) for i in 1:S.n]
+function calc_f(f,p,y,S)
+	y .= trunc_zero.(y)
+	@views [f(
+	 calc_v(getindex(y,S.tf_in[i]),p[f_range(S.bk,S.s,i)],p[f_range(S.bh,S.s,i)]),
+	 p[f_range(S.ba,S.N,i)],
+	 set_r(p[f_range(S.br,S.ri,i)],S.tf_in_num)) for i in 1:S.n]
+end
 
 function ode!(du, u, p, t, S, f)
 	n = S.n
