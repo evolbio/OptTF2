@@ -104,18 +104,18 @@ function ode!(du, u, p, t, S, f)
 	u_m = @view u[1:n]			# mRNA
 	u_p = @view u[n+1:2n]		# protein
 	
-	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] with linear_sigmoid pattern
+	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] w/linear_sigmoid 
 	# set min on rates m_a, m_d, p_a, p_d, causes top to be 1e2 + 1e-2
-	ppp = (pp .* S.p_mult) .+ S.p_min
+	pp .= (pp .* S.p_mult) .+ S.p_min
 
-	m_a = @view ppp[1:n]
-	m_d = @view ppp[n+1:2n]
-	p_a = @view ppp[2n+1:3n]
-	p_d = @view ppp[3n+1:4n]
-	f_val = calc_f(f,ppp,u_p,S)
+	m_a = @view pp[1:n]
+	m_d = @view pp[n+1:2n]
+	p_a = @view pp[2n+1:3n]
+	p_d = @view pp[3n+1:4n]
+	f_val = calc_f(f,pp,u_p,S)
 	
-	@views du[1:n] .= m_a .* f_val .- m_d .* u_m		# mRNA level
-	@views du[n+1:2n] .= p_a .* u_m .- p_d .* u_p		# protein level
+	du[1:n] .= m_a .* f_val .- m_d .* u_m		# mRNA level
+	du[n+1:2n] .= p_a .* u_m .- p_d .* u_p		# protein level
 end
 
 # modified from FitODE.jl
@@ -267,7 +267,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
 						 cb = callback, maxiters=S.max_it)
 	end
 	# To prepare for final fitting and calculations, must set prob to full training
