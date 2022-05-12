@@ -37,7 +37,7 @@ function generate_repressilator(S)
 	# size is (3,1001) for three proteins at 1001 timepoints
 	# and 1000 save_incr steps
 	# for fitting, probably sufficient to use subset of about 350 pts
-	data = solve(oprob, Tsit5(), saveat=10.)[4:6,total_steps-save_steps:total_steps]
+	data = solve(oprob, Tsit5(), saveat=save_incr)[4:6,total_steps-save_steps:total_steps]
 	# make matrix of first diffs for use in loss function
 	data_diff = data[:,2:end] - data[:,1:end-1]
 	u0 = data[:,1]

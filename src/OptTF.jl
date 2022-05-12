@@ -115,6 +115,20 @@ function ode!(du, u, p, t, S, f)
 	du[n+1:2n] .= p_a .* u_m .- p_d .* u_p		# protein level
 end
 
+# for stochastic jumps
+jump_rate(u,p,t,rate) = rate
+function jump_affect!(integrator)
+	i = rand(1:length(integrator.u))	# randomly select variable
+	val = integrator.u[i]				# if < 1, add 1.0, else +/- sqrt
+	val += (val < 1.0) ? 1.0 : rand(-1:2:1) * sqrt(val)
+	integrator.u[i] = val
+end
+function jump_prob(prob,S)
+	jump = ConstantRateJump((u,p,t) -> jump_rate(u,p,t,S.jump_rate),jump_affect!)
+	# do not save soln data at jumps
+	JumpProblem(prob,Direct(),jump,save_positions=(false,false))
+end
+
 # modified from FitODE.jl
 # m is number of protein dimensions for target pattern
 # n is number of protein dimensions
@@ -130,11 +144,30 @@ function setup_diffeq_func(S)
 	k1 = d*(1.0+exp(-10.0*d))
 	k2 = 10.0*(1.0-d) + log(d/(1.0-d))
 	max_u = S.rate / S.low_rate
-	predict_ode_dummy(p, prob, u_init) =
+	# 
+	function predict_ode_dummy(p, prob, u_init)
+		if S.jump
+			prob = remake(prob,u0=vcat((max_u.*linear_sigmoid.(p[1:S.n],d,k1,k2)),
+					u_init,(max_u.*linear_sigmoid.(p[S.n+1:ddim_all],d,k1,k2))),
+					p=p[ddim_all+1:end])
+			prob = jump_prob(prob,S)
+			solve(prob, S.solver)
+		else
 			solve(prob, S.solver, u0=vcat((max_u.*linear_sigmoid.(p[1:S.n],d,k1,k2)),
 					u_init,(max_u.*linear_sigmoid.(p[S.n+1:ddim_all],d,k1,k2))),
 					p=p[ddim_all+1:end])
-	predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
+		end
+	end
+	# predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
+	function predict_ode_nodummy(p, prob, u_init)
+		if S.jump
+			prob = remake(prob, p=p)
+			prob = jump_prob(prob,S)
+			solve(prob, S.solver)
+		else
+			solve(prob, S.solver, p=p)
+		end
+	end
 
 	predict = S.opt_dummy_u0 ?
 		predict_ode_dummy :
@@ -191,7 +224,6 @@ function loss(p, S, L)
 	pred = @view pred_all[S.n+1:S.n+S.m,:]
 	pred_length = length(pred[1,:])
 	if pred_length != length(L.w[1,:]) println("Mismatch") end
-	# add cost for concentrations over 1e3
 	loss = sum(abs2, L.w[:,1:pred_length] .* (L.data[:,1:pred_length] .- pred))
 	return loss, S, L, pred_all
 end
@@ -238,6 +270,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 		prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
 						(-00.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
+		# if S.jump prob = jump_prob(prob,S) end
 		L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
@@ -275,12 +308,13 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 	# period with tspan and tsteps and then redefine loss_args values in L
 	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
 					tspan, p, saveat = tsteps, reltol = S.rtolR, abstol = S.atolR)
+	if S.jump prob = jump_prob(prob,S) end
 	if (S.train_frac == 1.0)
 		prob_all = prob
 	else
 		prob_all = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0, tspan_all, 
 					p, saveat = tsteps_all, reltol = S.rtolR, abstol = S.atolR)
-		
+		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
 	w = ones(S.m,length(tsteps))
 	L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
