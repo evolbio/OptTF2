@@ -44,7 +44,7 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "repress-3-2_3.jld2"
+f_name = "repress-5-4_1.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -57,7 +57,7 @@ rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "repress-3-2_3.jld2"; 						# fill this in with desired file name
+file = "repress-5-4_1.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 idx = dt.S.opt_dummy_u0 ? 2dt.S.n-dt.S.m+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
@@ -69,7 +69,7 @@ OptTF.callback(dt.p, dt.loss_v, dt.S, dt.L, dt.pred)
 # Load intermediate results
 
 proj_tmp = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
-file = "20220513_093947_66.jld2"; 					# fill this in with desired file name
+file = "20220513_045714_66.jld2"; 					# fill this in with desired file name
 dtt = load_data(proj_tmp * file);					# may be warnings for loaded functions
 S = dtt.S;
 idx = S.opt_dummy_u0 ? 2S.n-S.m+1 : 1

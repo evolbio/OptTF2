@@ -320,7 +320,6 @@ function setup_refine_fit(p, S, L)
 	tspan = (L.tsteps[begin], L.tsteps[end])
 	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), L.u0,
 					tspan, p, saveat = L.tsteps, reltol = S.rtolR, abstol = S.atolR)
-	if S.jump prob = jump_prob(prob,S) end
 	if (S.train_frac == 1.0)
 		prob_all = prob
 	else
