@@ -3,7 +3,7 @@ using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, reset_rseed, recalc_settings
 
 default_ode() = Settings(allow_self = false, gr_type = 1, n=5, tf_in_num=4, rtol=1e-7, atol=1e-9,
-					adm_learn=0.01, train_frac=0.3, opt_dummy_u0 = true, jump = true)
+					adm_learn=0.01, train_frac=0.3, opt_dummy_u0 = true, jump = false)
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
 							actual_seed=set_rand_seed(false,rseed))
 

@@ -333,7 +333,7 @@ function refine_fit(p, S, L; rate_div=5.0, iter_mult=2.0)
 	rate = S.adm_learn / rate_div
 	iter = S.max_it * iter_mult
 	result = DiffEqFlux.sciml_train(p -> loss(p,S,L), p, ADAM(rate),
-						GalacticOptim.AutoZygote(); cb = callback, maxiters=iter)
+						GalacticOptim.AutoForwardDiff(); cb = callback, maxiters=iter)
 	return result.u
 end
 
