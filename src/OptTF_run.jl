@@ -28,7 +28,7 @@ p_opt2 = refine_fit_bfgs(p_opt1,S,L)
 loss1, _, _, pred1 = loss(p_opt1,S,L);		# use if p_opt2 fails or p_opt1 of interest
 loss2, _, _, pred2 = loss(p_opt2,S,L);
 
-use_2 = true;	# set to false if p_opt2 fails
+use_2 = true;	# set to false if p_opt2 fails, true if p_opt2 is good
 
 p, loss_v, pred = use_2 ? (p_opt2, loss2, pred2) : (p_opt1, loss1, pred1);
 
@@ -57,9 +57,30 @@ rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "repress-3-1_1.jld2"; 						# fill this in with desired file name
+file = "repress-3-2_3.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
-PP=ode_parse_p(dt.p[2dt.S.n-dt.S.m+1:end],dt.S);	# assuming opt_dummy_u0 is true
+idx = dt.S.opt_dummy_u0 ? 2dt.S.n-dt.S.m+1 : 1
+PP=ode_parse_p(dt.p[idx:end],dt.S);
 
 # plot final result
 OptTF.callback(dt.p, dt.loss_v, dt.S, dt.L, dt.pred)
+
+###################################################################
+# Load intermediate results
+
+proj_tmp = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
+file = "20220513_093947_66.jld2"; 					# fill this in with desired file name
+dtt = load_data(proj_tmp * file);					# may be warnings for loaded functions
+S = dtt.S;
+idx = S.opt_dummy_u0 ? 2S.n-S.m+1 : 1
+PP=ode_parse_p(dtt.p[idx:end],S);
+
+w, L, A = setup_refine_fit(dtt.p,S,dtt.L);
+p_opt2 = p_opt1 = refine_fit(dtt.p,S,L);
+L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
+
+# now can use commands from first section above
+
+
+
+

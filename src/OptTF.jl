@@ -4,7 +4,8 @@ using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEqu
 	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures
 include("OptTF_param.jl")
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
-			refine_fit_bfgs, refine_fit, loss, save_data, load_data, ode_parse_p
+			refine_fit_bfgs, refine_fit, setup_refine_fit, loss, save_data, 
+			load_data, ode_parse_p
 
 # Variables may go negative, which throws error. Could add bounds
 # to constrain optimization. But for now sufficient just to rerun
@@ -302,25 +303,35 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 		
 		iter = @sprintf "_%02d" i
 		tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"
-		jldsave(tmp_file; result.u, S, L)
+		p = result.u
+		jldsave(tmp_file; p, S, L)
 	end
 	# To prepare for final fitting and calculations, must set prob to full training
 	# period with tspan and tsteps and then redefine loss_args values in L
-	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
-					tspan, p, saveat = tsteps, reltol = S.rtolR, abstol = S.atolR)
+	w, L, A = setup_refine_fit(result.u, S, L)
+	p_opt = refine_fit(result.u, S, L)
+	return p_opt, L, A
+end
+
+function setup_refine_fit(p, S, L)
+	f = generate_tf_activation_f(S.tf_in_num)
+	predict = setup_diffeq_func(S);
+	_, _, _, tspan_all, tsteps_all = S.f_data(S);
+	tspan = (L.tsteps[begin], L.tsteps[end])
+	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), L.u0,
+					tspan, p, saveat = L.tsteps, reltol = S.rtolR, abstol = S.atolR)
 	if S.jump prob = jump_prob(prob,S) end
 	if (S.train_frac == 1.0)
 		prob_all = prob
 	else
-		prob_all = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0, tspan_all, 
+		prob_all = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), L.u0, tspan_all, 
 					p, saveat = tsteps_all, reltol = S.rtolR, abstol = S.atolR)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
-	w = ones(S.m,length(tsteps))
-	L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
+	w = ones(S.m,length(L.tsteps))
+	L = loss_args(L.u0,prob,predict,L.data,L.data_diff,L.tsteps,w)
 	A = all_time(prob_all, tsteps_all)
-	p_opt = refine_fit(result.u, S, L)
-	return p_opt, L, A
+	return w, L, A
 end
 
 #############################################################
