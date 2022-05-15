@@ -29,7 +29,6 @@ load_data_warning = true
 	prob				# problem to send to solve
 	predict				# function that calls correct solve to make prediction
 	data				# target data
-	data_diff			# first time differences for slopes at each point
 	tsteps				# time steps for training data
 	w					# weights for sequential fitting of time series
 end
@@ -246,7 +245,7 @@ end
 # new_rseed true uses new seed, false reuses preset_seed
 function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 	S.set_rseed(new_rseed, S.preset_seed)
-	data, data_diff, u0, tspan, tsteps = S.f_data(S);
+	data, u0, tspan, tsteps = S.f_data(S);
 	predict = setup_diffeq_func(S);
 	
 	# If using subset of data for training then keep original and truncate tsteps
@@ -272,7 +271,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 						(-00.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		# if S.jump prob = jump_prob(prob,S) end
-		L = loss_args(u0,prob,predict,data,data_diff,tsteps,w)
+		L = loss_args(u0,prob,predict,data,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i > 1)
@@ -282,7 +281,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 		end
 		
 		# use to look at plot of initial conditions, set to false for normal use
-		if false
+		if true
 			loss_v, _, _, pred_all = loss(p,S,L)
 			callback(p, loss_v, S, L, pred_all)
 			@assert false
@@ -328,7 +327,7 @@ function setup_refine_fit(p, S, L)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
 	w = ones(S.m,length(L.tsteps))
-	L = loss_args(L.u0,prob,predict,L.data,L.data_diff,L.tsteps,w)
+	L = loss_args(L.u0,prob,predict,L.data,L.tsteps,w)
 	A = all_time(prob_all, tsteps_all)
 	return w, L, A
 end

@@ -139,7 +139,7 @@ function init_ode_param(u0,S; noise=1e-1, start_equil=false)
 	# ode_parse adds S.low_rate to rate parameters, so subtract here
 	# multiply by 0.1 to slow down rate processes, otherwise so fast
 	# that equil achieved and maintained too strongly, so cannot fit fluctuations
-	p[ddim+1:ddim+4n] .= 0.1 .* p[ddim+1:ddim+4n] .- (S.low_rate .* ones(4n))
+	p[ddim+1:ddim+4n] .= 0.1 .* S.s_per_d .* p[ddim+1:ddim+4n] .- (S.low_rate .* ones(4n))
 	
 	p[ddim+1:ddim+4n] .= [inverse_lin_sigmoid(p[i]/S.rate,d,k1,k2) for i in ddim+1:ddim+4n]
 	

@@ -45,7 +45,7 @@ end
 @with_kw struct Settings
 
 # function to generate or load data for fitting
-f_data = generate_repressilator
+f_data = generate_circadian
 
 # stochastic jump
 jump = true
@@ -101,9 +101,12 @@ print_grad = false	# show gradient on terminal, requires significant overhead
 
 # parameter bounds: lower bound is zero for all parameters except
 # rates m_a, m_d, p_a, and p_d, which have lower bound of
-low_rate = 1e-2
+# rates are per second, transform to per day by multiplying by 86400.0 s/d
+s_per_d = 86400.0
+days	= 1.0		# number of circadian cycles 
+low_rate = 1e-2 * s_per_d
 # upper bounds
-rate 	= 1e2
+rate 	= 1e2 * s_per_d
 k		= 1e4
 h		= 5e0
 a		= 1e0
