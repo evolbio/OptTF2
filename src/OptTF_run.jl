@@ -59,7 +59,7 @@ rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 file = "repress-5-4_1.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
-idx = dt.S.opt_dummy_u0 ? 2dt.S.n-dt.S.m+1 : 1
+idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
 
 # plot final result
@@ -72,7 +72,7 @@ proj_tmp = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
 file = "20220513_045714_66.jld2"; 					# fill this in with desired file name
 dtt = load_data(proj_tmp * file);					# may be warnings for loaded functions
 S = dtt.S;
-idx = S.opt_dummy_u0 ? 2S.n-S.m+1 : 1
+idx = S.opt_dummy_u0 ? S.ddim+1 : 1
 PP=ode_parse_p(dtt.p[idx:end],S);
 
 w, L, A = setup_refine_fit(dtt.p,S,dtt.L);

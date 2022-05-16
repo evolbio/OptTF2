@@ -24,7 +24,7 @@ function ode_parse_p(p,S)
 	# min val for rates is S.d=1e-2, 0 for all others, max values vary, see p_max
 	# see linear_sigmoid() for transform of gradient params to ode params
 	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] with linear_sigmoid pattern
-	# set min on rates m_a, m_d, p_a, p_d, causes top to be 1e2 + 1e-2
+	# set min on rates m_a, m_d, p_a, p_d, causes top to be p_max + p_min
 	ppp = (pp .* S.p_mult) .+ S.p_min
 	m_a = @view ppp[1:n]			# n
 	m_d = @view ppp[n+1:2n]			# n
@@ -50,10 +50,10 @@ test_range(x, top, offset) = @assert minimum(x) >= offset && maximum(x) <= top+o
 
 function test_param(p,S)
 	P = ode_parse_p(p,S)
-	test_range(P.m_a,S.rate,S.low_rate)
-	test_range(P.m_d,S.rate,S.low_rate)
-	test_range(P.p_a,S.rate,S.low_rate)
-	test_range(P.p_d,S.rate,S.low_rate)
+	test_range(P.m_a,S.m_rate,S.low_rate)
+	test_range(P.m_d,S.m_rate,S.low_rate)
+	test_range(P.p_a,S.p_rate,S.low_rate)
+	test_range(P.p_d,S.p_rate,S.low_rate)
 	test_range(minimum(P.k),S.k)	# need min of min for array of arrays
 	test_range(minimum(P.h),S.h)
 	test_range(minimum(P.a),S.a)
@@ -90,58 +90,41 @@ end
 # Yields p_a=10, p_d=m_d=1, m_a=0.2 u, for which u is target initial value of protein
 # Alternatively, start with one protein type present and all other protein and mRNA conc at 0
 
-# All params have min value at 0 except rates which are min at 1e-2, all params have max vals
+# All params have min value at 0 except rates which are min at low_rate, all params have max vals
 # see ode_parse_p()
 
 function init_ode_param(u0,S; noise=1e-1, start_equil=false)
-	@assert length(u0) == (S.opt_dummy_u0 ? S.m : 2S.n)
 	num_p = S.num_param
 	p = zeros(num_p)
 	n = S.n
 	m = S.m
 	s = S.tf_in_num
 	N = 2^s
-	ddim = S.opt_dummy_u0 ? 2*n - m : 0
+	ddim = S.ddim
 	
 	d = 1e-2	# cutoff from boundaries at which change from linear to sigmoid
 	k1 = d*(1.0+exp(-10.0*d))
 	k2 = 10.0*(1.0-d) + log(d/(1.0-d))
 
-	if start_equil == true || S.opt_dummy_u0
-		# dummies packed as n mRNA and n-m proteins
-		# not transformed between linear_sigmoid and inverse_lin_sigmoid, use raw values
-		if S.opt_dummy_u0
-			# m mRNA for tracked proteins, 0.1*u0
-			p[1:m] .= [inverse_lin_sigmoid(0.1*u0[i]/1e4,d,k1,k2) for i in 1:m]					
-			if n > m
-				# n-m dummy mRNA, 0.1*u0[1]
-				p[m+1:n] .= [inverse_lin_sigmoid(0.1*u0[1]/1e4,d,k1,k2) for i in m+1:n]
-				# n-m dummy proteins set to u0[1]
-				p[n+1:2n-m] .= [inverse_lin_sigmoid(u0[1]/1e4,d,k1,k2) for i in n+1:2n-m]
-			end
-		end
-		base = S.opt_dummy_u0 ? 0 : n				# if false, u0 is 2S.n, if true, u0 is S.m
-# 		p[ddim+1:ddim+m] .= 0.2 .* u0[base+1:base+m] # m_a
-# 		if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[base+1]) .* ones(n-m) end
-		# start with parameters the same for all loci
-		p[ddim+1:ddim+n] .= 0.2 .* u0[base+1] .* ones(n) # m_a
-		p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
-		p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
-		p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d
-	else
-		u0 .= vcat(zeros(n),[20.],zeros(n-1))
-		p[ddim+1:ddim+n] .= 10.0 .* ones(n)			# m_a
-		p[ddim+n+1:ddim+2n] .= ones(n)				# m_d
-		p[ddim+2n+1:ddim+3n] .= 10.0 .* ones(n)		# p_a
-		p[ddim+3n+1:ddim+4n] .= ones(n)				# p_d		
+	if S.opt_dummy_u0
+		p[1:n] .= [inverse_lin_sigmoid(u0[i]/S.max_m,d,k1,k2) for i in 1:n]					
+		p[n+1:2n] .= [inverse_lin_sigmoid(u0[i]/S.max_p,d,k1,k2) for i in n+1:2n]					
 	end
+ 	# p[ddim+1:ddim+m] .= 0.2 .* u0[base+1:base+m] # m_a
+ 	# if (n>m) p[ddim+m+1:ddim+n] .= (0.2 * u0[base+1]) .* ones(n-m) end
+	# start with parameters the same for all loci
+	p[ddim+1:ddim+n] .= 1e-4 .* u0[n+1] .* ones(n) # m_a
+	p[ddim+n+1:ddim+2n] .= 1e-2 * ones(n)		# m_d
+	p[ddim+2n+1:ddim+3n] .= 1e-1 * ones(n)		# p_a
+	p[ddim+3n+1:ddim+4n] .= 1e-3 * ones(n)		# p_d
 	
 	# ode_parse adds S.low_rate to rate parameters, so subtract here
 	# multiply by 0.1 to slow down rate processes, otherwise so fast
 	# that equil achieved and maintained too strongly, so cannot fit fluctuations
 	p[ddim+1:ddim+4n] .= 0.1 .* S.s_per_d .* p[ddim+1:ddim+4n] .- (S.low_rate .* ones(4n))
 	
-	p[ddim+1:ddim+4n] .= [inverse_lin_sigmoid(p[i]/S.rate,d,k1,k2) for i in ddim+1:ddim+4n]
+	p[ddim+1:ddim+2n] .= [inverse_lin_sigmoid(p[i]/S.m_rate,d,k1,k2) for i in ddim+1:ddim+4n]
+	p[ddim+2n+1:ddim+4n] .= [inverse_lin_sigmoid(p[i]/S.p_rate,d,k1,k2) for i in ddim+1:ddim+4n]
 	
 	b = ddim+4n
 	p[b+1:b+n*s] .= 5e2 .* ones(n*s)			# k

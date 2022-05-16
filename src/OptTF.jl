@@ -96,13 +96,18 @@ function calc_f(f,p,y,S)
 	 set_r(p[f_range(S.br,S.ri,i)],S.tf_in_num)) for i in 1:S.n]
 end
 
-function ode!(du, u, p, t, S, f)
+# assumes x on [0,1], so intensity on [10^-6,1], 10^-3 arbitrary day/night transition
+intensity(x) = 10.0^(6.0*(x-1.0))
+
+# f is TF activation, g is external input
+# protein 1 is output, protein 2 influenced by input, m=2, n>=2
+function ode!(du, u, p, t, S, f, G)
 	n = S.n
 	u_m = @view u[1:n]			# mRNA
 	u_p = @view u[n+1:2n]		# protein
 	
 	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] w/linear_sigmoid 
-	# set min on rates m_a, m_d, p_a, p_d, causes top to be 1e2 + 1e-2
+	# set min on rates m_a, m_d, p_a, p_d, causes top to be p_max + p_min
 	pp .= (pp .* S.p_mult) .+ S.p_min
 
 	m_a = @view pp[1:n]
@@ -113,6 +118,9 @@ function ode!(du, u, p, t, S, f)
 	
 	du[1:n] .= m_a .* f_val .- m_d .* u_m		# mRNA level
 	du[n+1:2n] .= p_a .* u_m .- p_d .* u_p		# protein level
+	light = G.circadian_val(G,t)				# noisy circadian input
+	# fast extra production rate by post-translation modification or allostery
+	du[n+2] += S.light_prod_rate * intensity(light)		
 end
 
 # for stochastic jumps
@@ -136,30 +144,25 @@ end
 # for ode w/mRNA, u_init for all mRNA and for dummy proteins random or optimized
 # TF ODE has n mRNA plus n proteins
 function setup_diffeq_func(S)
-	ddim_p = S.n - S.m		# dummy protein dimensions
-	ddim_all = ddim_p + S.n	# dummy proteins plus dummy mRNA
 	# If optimizing initial conditions for dummy dimensions, then for initial condition u0,
 	# dummy dimensions are first entries of p
 	d = 1e-2	# cutoff from boundaries at which change from linear to sigmoid
 	k1 = d*(1.0+exp(-10.0*d))
 	k2 = 10.0*(1.0-d) + log(d/(1.0-d))
-	max_u = S.rate / S.low_rate
 	# 
-	function predict_ode_dummy(p, prob, u_init)
+	function predict_ode_dummy(p, prob)
+		u_init = vcat(S.max_m.*linear_sigmoid.(p[1:S.n],d,k1,k2),
+					S.max_p.*linear_sigmoid.(p[S.n+1:2S.n],d,k1,k2))
 		if S.jump
-			prob = remake(prob,u0=vcat((max_u.*linear_sigmoid.(p[1:S.n],d,k1,k2)),
-					u_init,(max_u.*linear_sigmoid.(p[S.n+1:ddim_all],d,k1,k2))),
-					p=p[ddim_all+1:end])
+			prob = remake(prob, u0=u_init, p=p[S.ddim+1:end])
 			prob = jump_prob(prob,S)
 			solve(prob, S.solver)
 		else
-			solve(prob, S.solver, u0=vcat((max_u.*linear_sigmoid.(p[1:S.n],d,k1,k2)),
-					u_init,(max_u.*linear_sigmoid.(p[S.n+1:ddim_all],d,k1,k2))),
-					p=p[ddim_all+1:end])
+			solve(prob, S.solver, u0=u_init, p=p[S.ddim+1:end])
 		end
 	end
 	# predict_ode_nodummy(p, prob, u_init) = solve(prob, S.solver, p=p)
-	function predict_ode_nodummy(p, prob, u_init)
+	function predict_ode_nodummy(p, prob)
 		if S.jump
 			prob = remake(prob, p=p)
 			prob = jump_prob(prob,S)
@@ -184,7 +187,7 @@ function callback(p, loss_val, S, L, pred_all;
 		println(@sprintf("%5.3e; %5.3e", loss_val, gnorm))
 	else
 		println(@sprintf("%5.3e", loss_val))
-		b = S.opt_dummy_u0 ? 2S.n-S.m : 0
+		b = S.opt_dummy_u0 ? 2S.n : 0
 		#P = ode_parse_p(p[b+1:end],S)
 		#display(P.a)
 	end
@@ -219,7 +222,7 @@ function callback(p, loss_val, S, L, pred_all;
 end
 
 function loss(p, S, L)
-	pred_all = L.predict(p, L.prob, L.u0)
+	pred_all = L.predict(p, L.prob)
 	# pick out tracked proteins
 	pred = @view pred_all[S.n+1:S.n+S.m,:]
 	pred_length = length(pred[1,:])
@@ -243,9 +246,17 @@ function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc)
 end
 
 # new_rseed true uses new seed, false reuses preset_seed
-function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
+# noise for jumps for all molecules, offset for circadium cycle,
+# noise_wait for average time in days for loss or gain of external light signal
+function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
+						offset = true, noise_wait = 0.0)
 	S.set_rseed(new_rseed, S.preset_seed)
-	data, u0, tspan, tsteps = S.f_data(S);
+	
+	# Need to extract data, tspan, tsteps
+	
+	u0 = (1e4-1e3) * rand(2S.n) .+ (1e3 * ones(2S.n))
+	u0[1:S.n] .= 1e-2 * u0[S.n+1:2S.n]	# set mRNAs to 1e-2 of protein levels
+	G = S.f_data(S; offset=offset, noise_wait=noise_wait);
 	predict = setup_diffeq_func(S);
 	
 	# If using subset of data for training then keep original and truncate tsteps
@@ -276,8 +287,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed)
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i > 1)
 			p = result.u
-			ddim = S.opt_dummy_u0 ? 2S.n - S.m : 0
-			test_param(p[ddim+1:end],S)		# check that params are within bounds
+			test_param(p[S.ddim+1:end],S)		# check that params are within bounds
 		end
 		
 		# use to look at plot of initial conditions, set to false for normal use

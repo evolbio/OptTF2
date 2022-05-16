@@ -56,9 +56,10 @@ jump_rate = 0.05
 train_frac = 1.0		# 1.0 means use all data for training
 
 # n => number of proteins w/n matching mRNA, for 2n
-# m is number of variables in target data, n>=m, with n-m number of dummy dimensions
-n = 5
-m = 3					# repressilator is 3, vary as needed
+# m=2 is min number of variables with n-m number of dummy dimensions
+# first protein is output, second protein responds to light input
+n = 3
+m = 2
 @assert n >= m
 
 # no self connections by this algorithm
@@ -104,14 +105,21 @@ print_grad = false	# show gradient on terminal, requires significant overhead
 # rates are per second, transform to per day by multiplying by 86400.0 s/d
 s_per_d = 86400.0
 days	= 1.0		# number of circadian cycles 
-low_rate = 1e-2 * s_per_d
+low_rate = 1e-3 * s_per_d
 # upper bounds
-rate 	= 1e2 * s_per_d
+m_rate 	= 1e-1 * s_per_d
+p_rate 	= 1e0 * s_per_d
 k		= 1e4
 h		= 5e0
 a		= 1e0
 r		= 1e1
-p_max	= [rate,k,h,a,r]
+p_max	= [m_rate,p_rate,k,h,a,r]
+max_p	= p_rate / low_rate
+max_m	= m_rate / low_rate
+# protein production rate in response to light, via fast post-translation
+# modification or allostery, base max rate via mRNA is p_rate * max_m
+# where max_m is max mRNA concentration
+light_prod_rate	= 10.0 * p_rate * max_m
 
 # values needed in ode_parse_p()
 s = tf_in_num
@@ -119,7 +127,7 @@ N = 2^s
 d = 1e-2
 k1 = d*(1.0+exp(-10.0*d))
 k2 = 10.0*(1.0-d) + log(d/(1.0-d))
-ddim = opt_dummy_u0 ? 2*n - m : 0
+ddim = opt_dummy_u0 ? 2*n : 0
 num_param = ddim+4n+2*n*s+n*N+n*(N - (s+1))
 p_min = calc_pmin(n,num_param,ddim,low_rate)
 p_mult = calc_pmult(n,s,N,p_min,p_max)
@@ -188,7 +196,7 @@ function calc_pmin(n,pnum,ddim,low_rate)
 end
 
 function calc_pmult(n,s,N,pmin,p_max)::Vector{Float64}
-	p_dim = [4n,n*s,n*s,n*N,n*(N-(s+1))]
+	p_dim = [2n,2n,n*s,n*s,n*N,n*(N-(s+1))]
 	p_mult = []
 	for i in 1:length(p_dim)
 		append!(p_mult, p_max[i] .* ones(p_dim[i]))

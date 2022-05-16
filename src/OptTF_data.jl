@@ -4,7 +4,7 @@ export generate_circadian, circadian_val
 
 # True control input is sin wave for daily cycle with period of one
 # Noisy input has intermittent signal loss and perhaps added noise
-# Noise_wait arg value is expected neg binomial time for shift between
+# Noise_wait arg value is expected neg binomial time in days for shift between
 # active signal and signal loss
 function generate_circadian(S; offset=true, noise_wait=0.0)
 	steps_per_day = 100
@@ -44,7 +44,7 @@ function generate_circadian(S; offset=true, noise_wait=0.0)
 		input_noisy = copy(input_true)
 	end
 	return (;input_true, input_noisy, noise, breakpoints, breakvalues, offset_value,
-				steps_per_day, tspan, tsteps)
+				steps_per_day, tspan, tsteps, circadian_val)
 end
 
 function plot_circadian_input(input, tsteps)
@@ -57,7 +57,7 @@ circadian_val(G,t) = ((sin(2π*t+G.offset_value) + 1.0) / 2.0) *
 
 # test continuous circadian_val function
 # G = generate_circadian(S;noise_wait=0.5);
-# plot(G.tsteps,[circadian_val(G,t) for t in G.tsteps])
+# plot(G.tsteps,[G.circadian_val(G,t) for t in G.tsteps])
 # plot!(G.tsteps,G.input_noisy)
 
 end	# module
