@@ -6,12 +6,10 @@ export generate_circadian, circadian_val
 # Noisy input has intermittent signal loss and perhaps added noise
 # Noise_wait arg value is expected neg binomial time in days for shift between
 # active signal and signal loss
-function generate_circadian(S; offset=true, noise_wait=0.0)
-	steps_per_day = 100
-	save_incr = 1.0 / steps_per_day 
+function generate_circadian(S; rand_offset=false, noise_wait=0.0)
 	tspan = (0., S.days)
-	tsteps = 0.:save_incr:S.days
-	offset_value = offset ? 2π*rand() : 0.0
+	tsteps = 0.:S.save_incr:S.days
+	offset_value = rand_offset ? 2π*rand() : π
 	input_true = [(sin(2π*t+offset_value) + 1.0) / 2.0 for t in tsteps]
 	noise = false
 	# use neg binomial mean of p/(1-p) for mean number of steps before switch for p not switch
@@ -44,7 +42,7 @@ function generate_circadian(S; offset=true, noise_wait=0.0)
 		input_noisy = copy(input_true)
 	end
 	return (;input_true, input_noisy, noise, breakpoints, breakvalues, offset_value,
-				steps_per_day, tspan, tsteps, circadian_val)
+				tspan, tsteps, circadian_val)
 end
 
 function plot_circadian_input(input, tsteps)

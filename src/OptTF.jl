@@ -28,7 +28,8 @@ load_data_warning = true
 	u0
 	prob				# problem to send to solve
 	predict				# function that calls correct solve to make prediction
-	data				# target data
+	input_true			# circadian sine wave
+	input_noisy			# noisy intermittent input
 	tsteps				# time steps for training data
 	w					# weights for sequential fitting of time series
 end
@@ -41,7 +42,7 @@ end
 
 make_loss_args_all(L::loss_args, A::all_time) =
 					loss_args(L; prob=A.prob_all, tsteps=A.tsteps_all,
-					w=ones(length(L.data[:,1]),length(L.data[1,:])))
+					w=ones(length(L.input_true)))
 
 # Generate function to calculate promoter activation following eq S6 of Marbach10_SI.pdf
 # Use as f=generate_tf_activation_f(s), in which s is number of input TF binding sites
@@ -178,8 +179,9 @@ function setup_diffeq_func(S)
 	return predict
 end
 
-function callback(p, loss_val, S, L, pred_all;
-						doplot = true, show_all = true, show_lines = true)
+hill(m,k,x) = x^k/(m^k+x^k)
+
+function callback(p, loss_val, S, L, pred_all; doplot = true, show_all = true)
 	# printing gradient takes calculation time, turn off may yield speedup
 	if (S.print_grad)
 		grad = gradient(p->loss(p,S,L)[1], p)[1]
@@ -187,22 +189,21 @@ function callback(p, loss_val, S, L, pred_all;
 		println(@sprintf("%5.3e; %5.3e", loss_val, gnorm))
 	else
 		println(@sprintf("%5.3e", loss_val))
-		b = S.opt_dummy_u0 ? 2S.n : 0
-		#P = ode_parse_p(p[b+1:end],S)
+		#P = ode_parse_p(p[S.ddim+1:end],S)
 		#display(P.a)
 	end
 	if doplot
 		len = length(pred_all[1,:])
-		ts = L.tsteps[1:len]
-		plot_type! = if show_lines plot! else scatter! end
+		ts = @view L.tsteps[1:len]
+		day = 0.5:1:ts[end]
+		night = 1:1:ts[end]
+		pred = @view pred_all[S.n+1:S.n+S.m,:]
 		if !show_all
 			# plot current prediction against data, show only target proteins
-			pred = @view pred_all[S.n+1:S.n+S.m,:]
 			dim = length(pred[:,1])
 			plt = plot(size=(600,400*dim), layout=(dim,1),left_margin=12px)
 			for i in 1:dim
-				plot_type!(ts, L.data[i,1:len], label = "", color=mma[1], subplot=i)
-				plot_type!(plt, ts, pred[i,:], label = "", color=mma[2], subplot=i)
+				plot!(plt, ts, pred[i,:], label = "", color=mma[1], subplot=i)
 			end
 		else
 			dim = length(pred_all[:,1])
@@ -210,11 +211,26 @@ function callback(p, loss_val, S, L, pred_all;
 			for i in 1:dim
 				# proteins [S.n+1:2S.n] on left, mRNA [1:S.n] on right
 				idx = vcat(2:2:dim,1:2:dim) 	# subplot index [2,4,6,...,1,3,5,...]
-				if (i > S.n && i <= (S.n + S.m)) # target data
-					plot_type!(ts, L.data[i-S.n,1:len], label = "", color=mma[1], subplot=idx[i])
-				end
-				plot_type!(plt, ts, pred_all[i,:], label = "", color=mma[2], subplot=idx[i])
+				plot!(plt, ts, pred_all[i,:], label = "", color=mma[1], subplot=idx[i])
 			end			
+		end
+		# show noisy signal, normalize height to max of associated protein concentration
+		max_conc = maximum(pred[2,:])
+		plot!(ts, max_conc * L.input_noisy[1:len], label = "", color=mma[2],
+						subplot=((show_all) ? 3 : 2))
+		# add vertical lines for day/night changes, horiz line in plot 1 for expression switch
+		plot!([S.switch_level], seriestype =:hline, color = :black, linestyle =:dot, 
+				linewidth=2, label=nothing, subplot=1)
+		for i in 1:2
+			subpl = (i == 1) ? 1 : ((show_all) ? 3 : 2)
+			if length(day) > 0
+				plot!(day, seriestype =:vline, color = :black, linestyle =:dot, 
+					linewidth=2, label=nothing, subplot=subpl)
+			end
+			if length(night) > 0
+				plot!(night, seriestype =:vline, color = :black, linestyle =:solid, 
+					linewidth=2, label=nothing, subplot=subpl)
+			end
 		end
 		display(plot(plt))
   	end
@@ -223,11 +239,14 @@ end
 
 function loss(p, S, L)
 	pred_all = L.predict(p, L.prob)
-	# pick out tracked proteins
-	pred = @view pred_all[S.n+1:S.n+S.m,:]
-	pred_length = length(pred[1,:])
-	if pred_length != length(L.w[1,:]) println("Mismatch") end
-	loss = sum(abs2, L.w[:,1:pred_length] .* (L.data[:,1:pred_length] .- pred))
+	# pick out tracked protein, first protein in system output
+	pred = @view pred_all[S.n+1,:]
+	pred_length = length(pred)
+	input = @view L.input_true[1:pred_length]
+	hill_input = hill.(0.5,3.0,input)
+	hill_pred  = hill.(S.switch_level,3.0,pred)
+	@assert pred_length == length(L.w)
+	loss = sum(abs2, L.w .* (hill_input .- hill_pred))
 	return loss, S, L, pred_all
 end
 
@@ -237,31 +256,27 @@ calc_gradient(p,S,L) = gradient(p->loss(p,S,L)[1], p)[1]
 # For iterative fitting of times series
 function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc) 
 	w = [1 - cdf(Beta(a,b),x/tsteps[end]) for x = tsteps]
-	v = w[w .> trunc]'
-	vv = copy(v)
-	for i in 2:S.m
-		vv = vcat(vv,v)
-	end
-	return vv
+	w[w .> trunc]
 end
 
 # new_rseed true uses new seed, false reuses preset_seed
 # noise for jumps for all molecules, offset for circadium cycle,
 # noise_wait for average time in days for loss or gain of external light signal
 function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
-						offset = true, noise_wait = 0.0)
+						offset = false, noise_wait = 0.0)
 	S.set_rseed(new_rseed, S.preset_seed)
 	
 	# Need to extract data, tspan, tsteps
 	
+	# random init on [1e3,1e4] for protein, [1e1,1e2] for mRNA if !S.opt_dummy_u0
 	u0 = (1e4-1e3) * rand(2S.n) .+ (1e3 * ones(2S.n))
 	u0[1:S.n] .= 1e-2 * u0[S.n+1:2S.n]	# set mRNAs to 1e-2 of protein levels
-	G = S.f_data(S; offset=offset, noise_wait=noise_wait);
+	G = S.f_data(S; rand_offset=offset, noise_wait=noise_wait);
 	predict = setup_diffeq_func(S);
 	
 	# If using subset of data for training then keep original and truncate tsteps
-	tsteps_all = copy(tsteps)
-	tspan_all = tspan
+	tsteps = tsteps_all = G.tsteps
+	tspan = tspan_all = G.tspan
 	if (S.train_frac < 1)
 		tsteps = tsteps[tsteps .<= S.train_frac*tsteps[end]]
 		tspan = (tsteps[begin], tsteps[end])
@@ -275,14 +290,14 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	for i in 1:length(beta_a)
 		println("Iterate ", i, " of ", length(beta_a))
 		w = weights(S.wt_base^beta_a[i], tsteps, S)
-		last_time = tsteps[length(w[1,:])]
+		last_time = tsteps[length(w)]
 		ts = tsteps[tsteps .<= last_time]
 		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
-		prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), u0,
+		prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f, G), u0,
 						(-00.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		# if S.jump prob = jump_prob(prob,S) end
-		L = loss_args(u0,prob,predict,data,tsteps,w)
+		L = loss_args(u0,prob,predict,G.input_true,G.input_noisy,tsteps,w)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i > 1)
@@ -337,7 +352,7 @@ function setup_refine_fit(p, S, L)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
 	w = ones(S.m,length(L.tsteps))
-	L = loss_args(L.u0,prob,predict,L.data,L.tsteps,w)
+	L = loss_args(L.u0,prob,predict,L.input_true,L.input_noisy,L.tsteps,w)
 	A = all_time(prob_all, tsteps_all)
 	return w, L, A
 end

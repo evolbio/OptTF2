@@ -2,8 +2,19 @@ module OptTF_settings
 using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, reset_rseed, recalc_settings
 
-default_ode() = Settings(allow_self = false, gr_type = 1, n=3, tf_in_num=2, rtol=1e-7, atol=1e-9,
-					adm_learn=0.01, train_frac=0.3, opt_dummy_u0 = true, jump = false)
+default_ode() = Settings(
+	allow_self = false,
+	gr_type = 1,
+	n=3,
+	tf_in_num=2,
+	rtol=1e-7,
+	atol=1e-9,
+	adm_learn=0.01,
+	days = 3.0,
+	train_frac=1,
+	opt_dummy_u0 = true,
+	jump = false
+)
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
 							actual_seed=set_rand_seed(false,rseed))
 
@@ -11,29 +22,6 @@ function set_rand_seed(gen_seed, preset_seed)
 	rseed = gen_seed ? rand(UInt) : preset_seed
 	Random.seed!(rseed)
 	return rseed
-end
-
-# fix calculated settings, in case one setting changes must propagate to others
-function recalc_settings(S)
-	@assert false "Recalc does not include ode_parse_p components, \
-		reset by modifying default_ode"
-	tf_in = 
-  	if S.gr_type == 2
-	  circshift([[i] for i in 1:S.n],1)		# cycle_digraph, as in repressilator
-  	elseif S.allow_self
-	  [sort(sample(1:S.n, S.tf_in_num, replace=false)) for i in 1:S.n] # digraph w/tf_in_num in degree
-  	else
-	  [sort(sample(1:S.n, S.tf_in_num, replace=false)) for i in 1:S.n] # digraph w/tf_in_num in degree
-  	end
-	
-	S = Settings(S; start_time = Dates.format(now(),"yyyymmdd_HHMMSS"),
-			git_vers = chomp(read(`git -C $(S.proj_dir) rev-parse --short HEAD`,String)),
-			actual_seed = set_rand_seed(S.generate_rand_seed, S.preset_seed),
-			wt_steps = Int(ceil(log(500)/log(S.wt_base))))
-	S = Settings(S; tf_in=tf_in)
-	S = Settings(S; out_file = "/Users/steve/Desktop/" * S.start_time * ".jld2")
-	
-	return S
 end
 
 # One can initialize and then modify settings as follows
@@ -61,6 +49,7 @@ train_frac = 1.0		# 1.0 means use all data for training
 n = 3
 m = 2
 @assert n >= m
+@assert m >= 2
 
 # no self connections by this algorithm
 allow_self = false		# allow self connections
@@ -104,7 +93,10 @@ print_grad = false	# show gradient on terminal, requires significant overhead
 # rates m_a, m_d, p_a, and p_d, which have lower bound of
 # rates are per second, transform to per day by multiplying by 86400.0 s/d
 s_per_d = 86400.0
-days	= 1.0		# number of circadian cycles 
+days	= 1.0		# number of circadian cycles
+steps_per_day = 50
+save_incr = 1.0 / steps_per_day 
+
 low_rate = 1e-3 * s_per_d
 # upper bounds
 m_rate 	= 1e-1 * s_per_d
@@ -114,12 +106,16 @@ h		= 5e0
 a		= 1e0
 r		= 1e1
 p_max	= [m_rate,p_rate,k,h,a,r]
-max_p	= p_rate / low_rate
 max_m	= m_rate / low_rate
 # protein production rate in response to light, via fast post-translation
 # modification or allostery, base max rate via mRNA is p_rate * max_m
 # where max_m is max mRNA concentration
-light_prod_rate	= 10.0 * p_rate * max_m
+light_mult = 1e0
+light_prod_rate	= light_mult * p_rate * max_m
+# protein produced at max rate p_prate + from light stimulation at
+# p_prate * light_mult * max_m
+max_p	= p_rate * (1+light_mult) * max_m / low_rate
+switch_level = 1e-2 * p_rate * max_m / low_rate
 
 # values needed in ode_parse_p()
 s = tf_in_num
@@ -202,6 +198,29 @@ function calc_pmult(n,s,N,pmin,p_max)::Vector{Float64}
 		append!(p_mult, p_max[i] .* ones(p_dim[i]))
 	end
 	p_mult
+end
+
+# fix calculated settings, in case one setting changes must propagate to others
+function recalc_settings(S)
+	@assert false "Recalc does not include ode_parse_p components and other components,\
+		\n\treset by modifying default_ode"
+	tf_in = 
+  	if S.gr_type == 2
+	  circshift([[i] for i in 1:S.n],1)		# cycle_digraph, as in repressilator
+  	elseif S.allow_self
+	  [sort(sample(1:S.n, S.tf_in_num, replace=false)) for i in 1:S.n] # digraph w/tf_in_num in degree
+  	else
+	  [sort(sample(1:S.n, S.tf_in_num, replace=false)) for i in 1:S.n] # digraph w/tf_in_num in degree
+  	end
+	
+	S = Settings(S; start_time = Dates.format(now(),"yyyymmdd_HHMMSS"),
+			git_vers = chomp(read(`git -C $(S.proj_dir) rev-parse --short HEAD`,String)),
+			actual_seed = set_rand_seed(S.generate_rand_seed, S.preset_seed),
+			wt_steps = Int(ceil(log(500)/log(S.wt_base))))
+	S = Settings(S; tf_in=tf_in)
+	S = Settings(S; out_file = "/Users/steve/Desktop/" * S.start_time * ".jld2")
+	
+	return S
 end
 
 end	# module
