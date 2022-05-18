@@ -19,7 +19,7 @@ function generate_circadian(S; rand_offset=false, noise_wait=0.0)
 		noise = true
 		n = length(input_true)
 		mask = ones(n)
-		x = noise_wait / save_incr
+		x = noise_wait / S.save_incr
 		prob_no_switch = x / (1+x)		# from negative binomial mean
 		switch = false
 		for i in 2:n
@@ -41,8 +41,9 @@ function generate_circadian(S; rand_offset=false, noise_wait=0.0)
 	else
 		input_noisy = copy(input_true)
 	end
+	steps_per_day = S.steps_per_day
 	return (;input_true, input_noisy, noise, breakpoints, breakvalues, offset_value,
-				tspan, tsteps, circadian_val)
+				tspan, tsteps, circadian_val, steps_per_day)
 end
 
 function plot_circadian_input(input, tsteps)
