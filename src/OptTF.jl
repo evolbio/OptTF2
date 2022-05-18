@@ -3,6 +3,7 @@ module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
 	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures
 include("OptTF_param.jl")
+include("OptTF_plots.jl")
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
 			refine_fit_bfgs, refine_fit, setup_refine_fit, loss, save_data, 
 			load_data, ode_parse_p
@@ -31,6 +32,7 @@ load_data_warning = true
 	input_true			# circadian sine wave
 	input_noisy			# noisy intermittent input
 	tsteps				# time steps for training data
+	hill_k				# hill coeff for loss calculation
 	w					# weights for sequential fitting of time series
 end
 
@@ -193,67 +195,7 @@ function callback(p, loss_val, S, L, pred_all; doplot = true, show_all = true)
 		#display(P.a)
 	end
 	if doplot
-		lw = 2
-		len = length(pred_all[1,:])
-		ts = @view L.tsteps[1:len]
-		day = 0.5:1:ts[end]
-		night = 1:1:ts[end]
-		pred = @view pred_all[S.n+1:S.n+S.m,:]
-		
-		hill_k = 100.0
-		log10_yrange = 4
-		log10_switch = log10(S.switch_level)
-		# for example, 1og10 range of 4 and switch at 1e3 yields range (1e1,1e5)
-		yrange = (10^(log10_switch - log10_yrange/2), 10^(log10_switch + log10_yrange/2))
-		if !show_all
-			# plot current prediction against data, show only target proteins
-			dim = length(pred[:,1])
-			plt = plot(size=(600,400*dim), layout=(dim,1),left_margin=12px)
-			for i in 1:dim
-				plot!(plt, ts, pred[i,:], label = "", color=mma[1], subplot=i,
-						yscale=(i==1 ? :log10 : :identity), ylim=(i==1 ? yrange : :auto),
-						linewidth=lw)
-			end
-		else
-			dim = length(pred_all[:,1])
-			plt = plot(size=(1200,250*(dim ÷ 2)), layout=((dim ÷ 2),2),left_margin=12px)
-			for i in 1:dim
-				# proteins [S.n+1:2S.n] on left, mRNA [1:S.n] on right
-				idx = vcat(2:2:dim,1:2:dim) 	# subplot index [2,4,6,...,1,3,5,...]
-				plot!(plt, ts, pred_all[i,:], label = "", color=mma[1], subplot=idx[i],
-					yscale=(idx[i]==1 ? :log10 : :identity),
-					ylim=(idx[i]==1 ? yrange : :auto), linewidth=lw)
-			end			
-		end
-		# output normalized by hill vs target normalized by hill
-		target = 10.0.^((log10_yrange-0.1) * hill.(0.5,hill_k,L.input_true[1:len])
-							.+ 1.05 * ones(len))
-		output = 10.0.^((log10_yrange-0.1) *  hill.(S.switch_level,hill_k,pred[1,:])
-							.+ 1.05 * ones(len))
-		plot!(plt, ts, target, label = "", color=mma[2], subplot=1,
-			yscale=:log10, ylim=yrange, linewidth=lw)
-		plot!(plt, ts, output, label = "", color=mma[3], subplot=1,
-			yscale=:log10, ylim=yrange, linewidth=lw)
-		
-		# show noisy signal, normalize height to max of associated protein concentration
-		max_conc = maximum(pred[2,:])
-		plot!(ts, max_conc * L.input_noisy[1:len], label = "", color=mma[2],
-						subplot=((show_all) ? 3 : 2), linewidth=lw)
-		# add vertical lines for day/night changes, horiz line in plot 1 for expression switch
-		plot!([S.switch_level], seriestype =:hline, color = :black, linestyle =:dot, 
-				linewidth=2, label=nothing, subplot=1)
-		for i in 1:2
-			subpl = (i == 1) ? 1 : ((show_all) ? 3 : 2)
-			if length(day) > 0
-				plot!(day, seriestype =:vline, color = :black, linestyle =:dot, 
-					linewidth=2, label=nothing, subplot=subpl)
-			end
-			if length(night) > 0
-				plot!(night, seriestype =:vline, color = :black, linestyle =:solid, 
-					linewidth=2, label=nothing, subplot=subpl)
-			end
-		end
-		display(plot(plt))
+		plot_callback(loss_val, S, L, pred_all, show_all)
   	end
   	return false
 end
@@ -264,8 +206,8 @@ function loss(p, S, L)
 	pred = @view pred_all[S.n+1,:]
 	pred_length = length(pred)
 	input = @view L.input_true[1:pred_length]
-	hill_input = hill.(0.5,3.0,input)
-	hill_pred  = hill.(S.switch_level,3.0,pred)
+	hill_input = hill.(0.5,L.hill_k,input)
+	hill_pred  = hill.(S.switch_level,L.hill_k,pred)
 	@assert pred_length == length(L.w)
 	loss = sum(abs2, L.w .* (hill_input .- hill_pred))
 	return loss, S, L, pred_all
@@ -311,14 +253,16 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	for i in 1:length(beta_a)
 		println("Iterate ", i, " of ", length(beta_a))
 		w = weights(S.wt_base^beta_a[i], tsteps, S)
+		# consider alternative way of increasing Hill coeff with iterates
+		hill_k = 2.0 + i/5
 		last_time = tsteps[length(w)]
 		ts = tsteps[tsteps .<= last_time]
 		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
 		prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f, G), u0,
-						(-00.0,last_time), p, saveat = ts,
+						(0.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		# if S.jump prob = jump_prob(prob,S) end
-		L = loss_args(u0,prob,predict,G.input_true,G.input_noisy,tsteps,w)
+		L = loss_args(u0,prob,predict,G.input_true,G.input_noisy,tsteps,hill_k,w)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i > 1)
