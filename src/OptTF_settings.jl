@@ -4,15 +4,15 @@ export Settings, default_ode, reset_rseed, recalc_settings
 
 default_ode() = Settings(
 	allow_self = false,
-	gr_type = 2,
+	gr_type = 1,
 	n=3,
-	tf_in_num=1,
+	tf_in_num=2,
 	rtol=1e-7,
 	atol=1e-9,
 	adm_learn=0.01,
 	days = 3.0,
-	train_frac=1,
-	opt_dummy_u0 = false,
+	train_frac=1/3,
+	opt_dummy_u0 = true,
 	jump = false
 )
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,

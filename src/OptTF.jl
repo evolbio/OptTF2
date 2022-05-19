@@ -192,15 +192,14 @@ function callback(p, loss_val, S, L, G, pred_all; doplot = true, show_all = true
 		println(@sprintf("%5.3e; %5.3e", loss_val, gnorm))
 	else
 		println(@sprintf("%5.3e", loss_val))
-		println("Loss = ", loss(p,S,L)[1])
-
+		
+		#println("Loss = ", loss(p,S,L)[1])
 		#P = ode_parse_p(p[S.ddim+1:end],S)
 		#display(P.a)
 	end
 	if doplot
 		plot_callback(loss_val, S, L, G, pred_all, show_all)
   	end
-  	println("End callback")
   	return false
 end
 
@@ -208,7 +207,6 @@ function loss(p, S, L)
 	G = S.f_data(S; rand_offset=L.rand_offset, noise_wait=L.noise_wait)
 	prob = remake(L.prob, f=(du, u, p, t) -> ode!(du, u, p, t, S, L.f, G))
 	pred_all = L.predict(p, prob)
-	println("length pred_all = ", length(pred_all[S.n+1,:]))
 
 	# pick out tracked protein, first protein in system output
 	pred = @view pred_all[S.n+1,:]
@@ -218,7 +216,6 @@ function loss(p, S, L)
 	hill_pred  = hill.(S.switch_level,L.hill_k,pred)
 	@assert pred_length == length(L.w)
 	loss = sum(abs2, L.w .* (hill_input .- hill_pred))
-	println("here 1")
 	return loss, S, L, G, pred_all
 end
 
