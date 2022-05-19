@@ -1,4 +1,4 @@
-function plot_callback(loss_val, S, L, pred_all, show_all)
+function plot_callback(loss_val, S, L, G, pred_all, show_all)
 	lw = 2
 	len = length(pred_all[1,:])
 	ts = @view L.tsteps[1:len]
@@ -31,7 +31,7 @@ function plot_callback(loss_val, S, L, pred_all, show_all)
 		end			
 	end
 	# output normalized by hill vs target normalized by hill
-	target = 10.0.^((log10_yrange-0.1) * hill.(0.5,L.hill_k,L.input_true[1:len])
+	target = 10.0.^((log10_yrange-0.1) * hill.(0.5,L.hill_k,G.input_true[1:len])
 						.+ 1.05 * ones(len))
 	output = 10.0.^((log10_yrange-0.1) *  hill.(S.switch_level,L.hill_k,pred[1,:])
 						.+ 1.05 * ones(len))
@@ -42,7 +42,7 @@ function plot_callback(loss_val, S, L, pred_all, show_all)
 	
 	# show noisy signal, normalize height to max of associated protein concentration
 	max_conc = maximum(pred[2,:])
-	plot!(ts, max_conc * L.input_noisy[1:len], label = "", color=mma[2],
+	plot!(ts, max_conc * G.input_noisy[1:len], label = "", color=mma[2],
 					subplot=((show_all) ? 3 : 2), linewidth=lw)
 	# add vertical lines for day/night changes, horiz line in plot 1 for expression switch
 	plot!([S.switch_level], seriestype =:hline, color = :black, linestyle =:dot, 

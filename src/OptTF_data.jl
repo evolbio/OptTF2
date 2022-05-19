@@ -2,6 +2,19 @@ module OptTF_data
 using Plots
 export generate_circadian, circadian_val
 
+struct Circadian
+	input_true
+	input_noisy
+	noise
+	breakpoints
+	breakvalues
+	offset_value
+	tspan
+	tsteps
+	circadian_val
+	steps_per_day
+end
+
 # True control input is sin wave for daily cycle with period of one
 # Noisy input has intermittent signal loss and perhaps added noise
 # Noise_wait arg value is expected neg binomial time in days for shift between
@@ -42,7 +55,7 @@ function generate_circadian(S; rand_offset=false, noise_wait=0.0)
 		input_noisy = copy(input_true)
 	end
 	steps_per_day = S.steps_per_day
-	return (;input_true, input_noisy, noise, breakpoints, breakvalues, offset_value,
+	Circadian(input_true, input_noisy, noise, breakpoints, breakvalues, offset_value,
 				tspan, tsteps, circadian_val, steps_per_day)
 end
 

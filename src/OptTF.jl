@@ -29,11 +29,12 @@ load_data_warning = true
 	u0
 	prob				# problem to send to solve
 	predict				# function that calls correct solve to make prediction
-	input_true			# circadian sine wave
-	input_noisy			# noisy intermittent input
 	tsteps				# time steps for training data
 	hill_k				# hill coeff for loss calculation
 	w					# weights for sequential fitting of time series
+	f					# tf_activation function
+	rand_offset			# boolean, offset day/night input signal
+	noise_wait			# ave waiting time to random on/off switch for day/night input
 end
 
 # When fit only to training data subset, then need full time period info
@@ -44,7 +45,7 @@ end
 
 make_loss_args_all(L::loss_args, A::all_time) =
 					loss_args(L; prob=A.prob_all, tsteps=A.tsteps_all,
-					w=ones(length(L.input_true)))
+					w=ones(length(L.tsteps)))
 
 # Generate function to calculate promoter activation following eq S6 of Marbach10_SI.pdf
 # Use as f=generate_tf_activation_f(s), in which s is number of input TF binding sites
@@ -118,12 +119,12 @@ function ode!(du, u, p, t, S, f, G)
 	p_a = @view pp[2n+1:3n]
 	p_d = @view pp[3n+1:4n]
 	f_val = calc_f(f,pp,u_p,S)
-	
-	du[1:n] .= m_a .* f_val .- m_d .* u_m		# mRNA level
-	du[n+1:2n] .= p_a .* u_m .- p_d .* u_p		# protein level
+
+	du[1:n] = m_a .* f_val .- m_d .* u_m		# mRNA level
+	du[n+1:2n] = p_a .* u_m .- p_d .* u_p		# protein level
 	light = G.circadian_val(G,t)				# noisy circadian input
 	# fast extra production rate by post-translation modification or allostery
-	du[n+2] += S.light_prod_rate * intensity(light)		
+	du[n+2] += S.light_prod_rate * intensity(light)
 end
 
 # for stochastic jumps
@@ -183,7 +184,7 @@ end
 
 hill(m,k,x) = x^k/(m^k+x^k)
 
-function callback(p, loss_val, S, L, pred_all; doplot = true, show_all = true)
+function callback(p, loss_val, S, L, G, pred_all; doplot = true, show_all = true)
 	# printing gradient takes calculation time, turn off may yield speedup
 	if (S.print_grad)
 		grad = gradient(p->loss(p,S,L)[1], p)[1]
@@ -191,26 +192,34 @@ function callback(p, loss_val, S, L, pred_all; doplot = true, show_all = true)
 		println(@sprintf("%5.3e; %5.3e", loss_val, gnorm))
 	else
 		println(@sprintf("%5.3e", loss_val))
+		println("Loss = ", loss(p,S,L)[1])
+
 		#P = ode_parse_p(p[S.ddim+1:end],S)
 		#display(P.a)
 	end
 	if doplot
-		plot_callback(loss_val, S, L, pred_all, show_all)
+		plot_callback(loss_val, S, L, G, pred_all, show_all)
   	end
+  	println("End callback")
   	return false
 end
 
 function loss(p, S, L)
-	pred_all = L.predict(p, L.prob)
+	G = S.f_data(S; rand_offset=L.rand_offset, noise_wait=L.noise_wait)
+	prob = remake(L.prob, f=(du, u, p, t) -> ode!(du, u, p, t, S, L.f, G))
+	pred_all = L.predict(p, prob)
+	println("length pred_all = ", length(pred_all[S.n+1,:]))
+
 	# pick out tracked protein, first protein in system output
 	pred = @view pred_all[S.n+1,:]
 	pred_length = length(pred)
-	input = @view L.input_true[1:pred_length]
+	input = @view G.input_true[1:pred_length]
 	hill_input = hill.(0.5,L.hill_k,input)
 	hill_pred  = hill.(S.switch_level,L.hill_k,pred)
 	@assert pred_length == length(L.w)
 	loss = sum(abs2, L.w .* (hill_input .- hill_pred))
-	return loss, S, L, pred_all
+	println("here 1")
+	return loss, S, L, G, pred_all
 end
 
 # this uses zygote, which seems to be very slow, consider ForwardDiff
@@ -262,7 +271,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 						(0.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		# if S.jump prob = jump_prob(prob,S) end
-		L = loss_args(u0,prob,predict,G.input_true,G.input_noisy,tsteps,hill_k,w)
+		L = loss_args(u0,prob,predict,tsteps,hill_k,w,f,offset,noise_wait)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i > 1)
@@ -271,9 +280,10 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		end
 		
 		# use to look at plot of initial conditions, set to false for normal use
-		if true
-			loss_v, _, _, pred_all = loss(p,S,L)
-			callback(p, loss_v, S, L, pred_all)
+		if false
+			loss_v, _, _, G, pred_all = loss(p,S,L)
+			plot_callback(loss_v, S, L, G, pred_all, true)
+			println("gradient = ", gradient(p->loss(p,S,L)[1], p)[1])
 			@assert false
 		end
 		
@@ -287,7 +297,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
 						 cb = callback, maxiters=S.max_it)
 		
 		iter = @sprintf "_%02d" i
@@ -317,7 +327,7 @@ function setup_refine_fit(p, S, L)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
 	w = ones(S.m,length(L.tsteps))
-	L = loss_args(L.u0,prob,predict,L.input_true,L.input_noisy,L.tsteps,w)
+	L = loss_args(L.u0,prob,predict,L.tsteps,w,L.f,L.rand_offset,L.noise_wait)
 	A = all_time(prob_all, tsteps_all)
 	return w, L, A
 end
