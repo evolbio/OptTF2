@@ -92,10 +92,12 @@ calc_v(y, k, h) = (y ./ k).^h
 # see OptTF_param.ode_parse_p(p,S) for parameter extraction
 # no longer using ode_parse_p because it is slow, see git version 5ca1483 for original
 # of calc_f and ode!
+get_y(y,S,i) = (S.n == S.tf_in_num) ? y : getindex(y,S.tf_in[i])
+
 function calc_f(f,p,y,S)
 	y .= trunc_zero.(y)
 	@views [f(
-	 calc_v(getindex(y,S.tf_in[i]),p[f_range(S.bk,S.s,i)],p[f_range(S.bh,S.s,i)]),
+	 calc_v(get_y(y,S,i),p[f_range(S.bk,S.s,i)],p[f_range(S.bh,S.s,i)]),
 	 p[f_range(S.ba,S.N,i)],
 	 set_r(p[f_range(S.br,S.ri,i)],S.tf_in_num)) for i in 1:S.n]
 end
@@ -294,7 +296,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
 		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoZygote();
+						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
 						 cb = callback, maxiters=S.max_it)
 		
 		iter = @sprintf "_%02d" i
