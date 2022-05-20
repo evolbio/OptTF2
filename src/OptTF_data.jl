@@ -19,7 +19,8 @@ end
 # Noisy input has intermittent signal loss and perhaps added noise
 # Noise_wait arg value is expected neg binomial time in days for shift between
 # active signal and signal loss
-function generate_circadian(S; rand_offset=false, noise_wait=0.0)
+# init_on, if true, then signal on until random off, else off until random on
+function generate_circadian(S; init_on=false, rand_offset=false, noise_wait=0.0)
 	tspan = (0., S.days)
 	tsteps = 0.:S.save_incr:S.days
 	offset_value = rand_offset ? 2π*rand() : π
@@ -31,7 +32,7 @@ function generate_circadian(S; rand_offset=false, noise_wait=0.0)
 	if noise_wait > 0.0
 		noise = true
 		n = length(input_true)
-		mask = ones(n)
+		mask = (init_on) ? ones(n) : zeros(n)
 		x = noise_wait / S.save_incr
 		prob_no_switch = x / (1+x)		# from negative binomial mean
 		switch = false

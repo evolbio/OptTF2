@@ -81,6 +81,40 @@ L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
 
 # now can use commands from first section above
 
+###################################################################
+# Benchmark main calculations
+
+using OptTF, OptTF_settings, DifferentialEquations, BenchmarkTools, DiffEqFlux,
+	ForwardDiff, Profile
+S=default_ode();
+
+u0 = (1e4-1e3) * rand(2S.n) .+ (1e3 * ones(2S.n));
+u0[1:S.n] .= 1e-2 * u0[S.n+1:2S.n]	# set mRNAs to 1e-2 of protein levels;
+G = S.f_data(S; rand_offset=false, noise_wait=0.0);
+predict = OptTF.setup_diffeq_func(S);
+tsteps = tsteps_all = G.tsteps;
+tspan = tspan_all = G.tspan;
+if (S.train_frac < 1)
+	tsteps = tsteps[tsteps .<= S.train_frac*tsteps[end]];
+	tspan = (tsteps[begin], tsteps[end]);
+end
+p = OptTF.init_ode_param(u0,S; noise=0.1);
+f = OptTF.generate_tf_activation_f(S.tf_in_num);
+hill_k = 2.0;
+w = ones(length(tsteps));
+last_time = tsteps[length(w)];
+ts = tsteps;
+prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f, G), u0,
+				(0.0,last_time), p, saveat = ts,
+				reltol = S.rtol, abstol = S.atol);
+L = OptTF.loss_args(u0,prob,predict,tsteps,hill_k,w,f,false,false,0.0);
+
+@btime loss(p,S,L)[1];
+@btime ForwardDiff.gradient(p->loss(p,S,L)[1], p)[1];
+
+# uses Zygote, fails sometimes, slower than ForwardDiff for smaller length(p)
+@btime gradient(p->loss(p,S,L)[1], p)[1];	
+
 
 
 

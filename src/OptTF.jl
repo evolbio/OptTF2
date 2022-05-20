@@ -33,6 +33,7 @@ load_data_warning = true
 	hill_k				# hill coeff for loss calculation
 	w					# weights for sequential fitting of time series
 	f					# tf_activation function
+	init_on				# boolean, light signal initially on or off
 	rand_offset			# boolean, offset day/night input signal
 	noise_wait			# ave waiting time to random on/off switch for day/night input
 end
@@ -205,8 +206,31 @@ function callback(p, loss_val, S, L, G, pred_all; doplot = true, show_all = true
   	return false
 end
 
+function loss_batch(p, S, L)
+	lossv = 0.0
+	pred_all = Vector{Vector{Float64}}(undef,0)
+	local G_ret
+	lk = ReentrantLock()
+	Threads.@threads for i in 1:S.batch
+		if i < S.batch
+			lval = loss(p,S,L)[1]
+			lock(lk) do
+				lossv += lval
+			end
+		else	# last iterate, pick up data to plot for this call to loss
+			lval, _, _, G, pred = loss(p,S,L)
+			lock(lk) do
+				lossv += lval
+				pred_all = pred
+				G_ret = G
+			end
+		end
+	end
+	return lossv, S, L, G_ret, pred_all
+end
+
 function loss(p, S, L)
-	G = S.f_data(S; rand_offset=L.rand_offset, noise_wait=L.noise_wait)
+	G = S.f_data(S; init_on=L.init_on, rand_offset=L.rand_offset, noise_wait=L.noise_wait)
 	prob = remake(L.prob, f=(du, u, p, t) -> ode!(du, u, p, t, S, L.f, G))
 	pred_all = L.predict(p, prob)
 
@@ -234,7 +258,7 @@ end
 # noise for jumps for all molecules, offset for circadium cycle,
 # noise_wait for average time in days for loss or gain of external light signal
 function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
-						offset = false, noise_wait = 0.0)
+						init_on = false, offset = false, noise_wait = 0.0)
 	S.set_rseed(new_rseed, S.preset_seed)
 	
 	# Need to extract data, tspan, tsteps
@@ -242,7 +266,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	# random init on [1e3,1e4] for protein, [1e1,1e2] for mRNA if !S.opt_dummy_u0
 	u0 = (1e4-1e3) * rand(2S.n) .+ (1e3 * ones(2S.n))
 	u0[1:S.n] .= 1e-2 * u0[S.n+1:2S.n]	# set mRNAs to 1e-2 of protein levels
-	G = S.f_data(S; rand_offset=offset, noise_wait=noise_wait);
+	G = S.f_data(S; init_on=init_on, rand_offset=offset, noise_wait=noise_wait);
 	predict = setup_diffeq_func(S);
 	
 	# If using subset of data for training then keep original and truncate tsteps
@@ -270,7 +294,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 						(0.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		# if S.jump prob = jump_prob(prob,S) end
-		L = loss_args(u0,prob,predict,tsteps,hill_k,w,f,offset,noise_wait)
+		L = loss_args(u0,prob,predict,tsteps,hill_k,w,f,init_on,offset,noise_wait)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i > 1)
@@ -295,7 +319,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		# For constraints on variables, must use AutoForwardDiff() and add
 		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
-		result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
+		result = DiffEqFlux.sciml_train(p -> loss_batch(p,S,L),
 						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
 						 cb = callback, maxiters=S.max_it)
 		
@@ -326,7 +350,7 @@ function setup_refine_fit(p, S, L)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
 	w = ones(S.m,length(L.tsteps))
-	L = loss_args(L.u0,prob,predict,L.tsteps,w,L.f,L.rand_offset,L.noise_wait)
+	L = loss_args(L.u0,prob,predict,L.tsteps,w,L.f,L.init_on,L.rand_offset,L.noise_wait)
 	A = all_time(prob_all, tsteps_all)
 	return w, L, A
 end

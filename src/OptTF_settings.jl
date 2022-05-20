@@ -4,6 +4,7 @@ export Settings, default_ode, reset_rseed, recalc_settings
 
 default_ode() = Settings(
 	allow_self = false,
+	batch = 6,
 	gr_type = 1,
 	n=4,
 	tf_in_num=3,
@@ -34,6 +35,7 @@ end
 
 # function to generate or load data for fitting
 f_data = generate_circadian
+batch = 6					# parallel loss calculation with batch size of 5
 
 # stochastic jump
 jump = true
