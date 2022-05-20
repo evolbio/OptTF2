@@ -8,6 +8,7 @@ function plot_callback(loss_val, S, L, G, pred_all, show_all)
 	
 	log10_yrange = 4
 	log10_switch = log10(S.switch_level)
+	log10_bottom = log10_switch - (log10_yrange / 2)
 	# for example, 1og10 range of 4 and switch at 1e3 yields range (1e1,1e5)
 	yrange = (10^(log10_switch - log10_yrange/2), 10^(log10_switch + log10_yrange/2))
 	if !show_all
@@ -32,9 +33,9 @@ function plot_callback(loss_val, S, L, G, pred_all, show_all)
 	end
 	# output normalized by hill vs target normalized by hill
 	target = 10.0.^((log10_yrange-0.1) * hill.(0.5,L.hill_k,G.input_true[1:len])
-						.+ 1.05 * ones(len))
+						.+ (log10_bottom + 0.05) * ones(len))
 	output = 10.0.^((log10_yrange-0.1) *  hill.(S.switch_level,L.hill_k,pred[1,:])
-						.+ 1.05 * ones(len))
+						.+ (log10_bottom + 0.05) * ones(len))
 	plot!(plt, ts, target, label = "", color=mma[2], subplot=1,
 		yscale=:log10, ylim=yrange, linewidth=lw)
 	plot!(plt, ts, output, label = "", color=mma[3], subplot=1,

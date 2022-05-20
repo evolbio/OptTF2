@@ -4,15 +4,15 @@ export Settings, default_ode, reset_rseed, recalc_settings
 
 default_ode() = Settings(
 	allow_self = false,
-	batch = 6,
+	batch = 1,
 	gr_type = 1,
 	n=4,
 	tf_in_num=3,
 	rtol=1e-7,
 	atol=1e-9,
-	adm_learn=0.01,
-	days = 2.0,
-	train_frac=1,
+	adm_learn=0.05,
+	days = 3.0,
+	train_frac=2/2,
 	opt_dummy_u0 = true,
 	jump = false
 )
@@ -86,7 +86,7 @@ atol = 1e-12		# absolute tolerance for solver, ODE -> ~1e-12 or a bit less
 rtolR = 1e-10		# relative tolerance for solver for refine_fit stages
 atolR = 1e-12		# absolute tolerance for solver for refine_fit stages
 adm_learn = 0.0005	# Adam rate, >=0.0002 for Tsit5, >=0.0005 for TRBDF2, change as needed
-max_it = 200		# max iterates for each incremental learning step
+max_it = 100		# max iterates for each incremental learning step
 					# try 200 with small tolerances, and Rodas4P solver
 					# and 500 for larger tolerances and TRBDF2
 print_grad = false	# show gradient on terminal, requires significant overhead
@@ -117,7 +117,7 @@ light_prod_rate	= light_mult * p_rate * max_m
 # protein produced at max rate p_prate + from light stimulation at
 # p_prate * light_mult * max_m
 max_p	= p_rate * (1+light_mult) * max_m / low_rate
-switch_level = 1e-2 * p_rate * max_m / low_rate
+switch_level = 1e-3 * p_rate * max_m / low_rate
 
 # values needed in ode_parse_p()
 s = tf_in_num
@@ -183,7 +183,7 @@ wt_incr = 1			# increment for i = 1:wt_incr:wt_steps, see above
 # Or maybe the stiff solvers provide less error fluctuation
 # and so need greater learning momentum to shake out of local minima ??
 
-solver = Tsit5()	# Rodas4P() or Tsit5()
+solver = Rodas4P()	# Rodas4P() or Tsit5()
 
 end # struct
 

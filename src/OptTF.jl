@@ -263,8 +263,8 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	
 	# Need to extract data, tspan, tsteps
 	
-	# random init on [1e3,1e4] for protein, [1e1,1e2] for mRNA if !S.opt_dummy_u0
-	u0 = (1e4-1e3) * rand(2S.n) .+ (1e3 * ones(2S.n))
+	# random init on [1e2,1e4] for protein, [1e0,1e2] for mRNA if !S.opt_dummy_u0
+	u0 = (1e4-1e2) * rand(2S.n) .+ (1e2 * ones(2S.n))
 	u0[1:S.n] .= 1e-2 * u0[S.n+1:2S.n]	# set mRNAs to 1e-2 of protein levels
 	G = S.f_data(S; init_on=init_on, rand_offset=offset, noise_wait=noise_wait);
 	predict = setup_diffeq_func(S);
@@ -286,7 +286,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		println("Iterate ", i, " of ", length(beta_a))
 		w = weights(S.wt_base^beta_a[i], tsteps, S)
 		# consider alternative way of increasing Hill coeff with iterates
-		hill_k = 2.0 + i/5
+		hill_k = 2.0# + i/5
 		last_time = tsteps[length(w)]
 		ts = tsteps[tsteps .<= last_time]
 		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
@@ -306,7 +306,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		if false
 			loss_v, _, _, G, pred_all = loss(p,S,L)
 			plot_callback(loss_v, S, L, G, pred_all, true)
-			println("gradient = ", gradient(p->loss(p,S,L)[1], p)[1])
+			#println("gradient = ", gradient(p->loss(p,S,L)[1], p)[1])
 			@assert false
 		end
 		
@@ -319,9 +319,10 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		# For constraints on variables, must use AutoForwardDiff() and add
 		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
-		result = DiffEqFlux.sciml_train(p -> loss_batch(p,S,L),
-						 p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
-						 cb = callback, maxiters=S.max_it)
+		result = DiffEqFlux.sciml_train(
+					p -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
+					p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+					cb = callback, maxiters=S.max_it)
 		
 		iter = @sprintf "_%02d" i
 		tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"

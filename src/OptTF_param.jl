@@ -113,9 +113,9 @@ function init_ode_param(u0,S; noise=1e-1)
  	# mRNA equil = u0 for protein * 1e-2; protein equil = u0 for protein
  	# should make constants here in relation to settings, S, otherwise fragile
  	# and will break for changes in m_rate, p_rate
-	p[ddim+1:ddim+n] .= 1e-5 .* u0[n+1:2n] .* ones(n) 	# m_a
+	p[ddim+1:ddim+n] .= 1.01e-5 .* u0[n+1:2n] .* ones(n) 	# m_a
 	p[ddim+n+1:ddim+2n] .= 1.01e-3 * ones(n)			# m_d
-	p[ddim+2n+1:ddim+3n] .= 1e-1 * ones(n)				# p_a
+	p[ddim+2n+1:ddim+3n] .= 1.01e-1 * ones(n)				# p_a
 	p[ddim+3n+1:ddim+4n] .= 1.01e-3 * ones(n)			# p_d
 	
 	# ode_parse adds S.low_rate to rates, so subtract here, change rates to 1/d
