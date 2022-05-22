@@ -8,11 +8,12 @@ default_ode() = Settings(
 	gr_type = 1,
 	n=4,
 	tf_in_num=3,
-	rtol=1e-7,
-	atol=1e-9,
-	adm_learn=0.05,
-	days = 3.0,
-	train_frac=2/2,
+	rtol=1e-5,
+	atol=1e-7,
+	adm_learn=0.02,
+	days =2.0,
+	train_frac=1,
+	max_it=200,
 	opt_dummy_u0 = true,
 	jump = false
 )
@@ -37,9 +38,12 @@ end
 f_data = generate_circadian
 batch = 6					# parallel loss calculation with batch size of 5
 
+# rates are per second, transform to per day by multiplying by 86400.0 s/d
+s_per_d = 86400.0
+
 # stochastic jump
 jump = true
-jump_rate = 0.05
+jump_rate = 5e-3 * s_per_d
 
 # fraction of time series to use for training, rest can be used to test prediction
 # truncates training data as train_data[train_data .<= train_frac*train_data[end]]
@@ -86,15 +90,13 @@ atol = 1e-12		# absolute tolerance for solver, ODE -> ~1e-12 or a bit less
 rtolR = 1e-10		# relative tolerance for solver for refine_fit stages
 atolR = 1e-12		# absolute tolerance for solver for refine_fit stages
 adm_learn = 0.0005	# Adam rate, >=0.0002 for Tsit5, >=0.0005 for TRBDF2, change as needed
-max_it = 100		# max iterates for each incremental learning step
+max_it = 200		# max iterates for each incremental learning step
 					# try 200 with small tolerances, and Rodas4P solver
 					# and 500 for larger tolerances and TRBDF2
 print_grad = false	# show gradient on terminal, requires significant overhead
 
 # parameter bounds: lower bound is zero for all parameters except
 # rates m_a, m_d, p_a, and p_d, which have lower bound of
-# rates are per second, transform to per day by multiplying by 86400.0 s/d
-s_per_d = 86400.0
 days	= 1.0		# number of circadian cycles
 steps_per_day = 50
 save_incr = 1.0 / steps_per_day 
@@ -183,7 +185,7 @@ wt_incr = 1			# increment for i = 1:wt_incr:wt_steps, see above
 # Or maybe the stiff solvers provide less error fluctuation
 # and so need greater learning momentum to shake out of local minima ??
 
-solver = Rodas4P()	# Rodas4P() or Tsit5()
+solver = Tsit5()	# Rodas4P() or Tsit5()
 
 end # struct
 
