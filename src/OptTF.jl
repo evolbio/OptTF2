@@ -343,20 +343,20 @@ end
 function setup_refine_fit(p, S, L)
 	f = generate_tf_activation_f(S.tf_in_num)
 	predict = setup_diffeq_func(S);
-	_, _, _, tspan_all, tsteps_all = S.f_data(S);
+	G = S.f_data(S);
 	tspan = (L.tsteps[begin], L.tsteps[end])
 	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), L.u0,
 					tspan, p, saveat = L.tsteps, reltol = S.rtolR, abstol = S.atolR)
 	if (S.train_frac == 1.0)
 		prob_all = prob
 	else
-		prob_all = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), L.u0, tspan_all, 
-					p, saveat = tsteps_all, reltol = S.rtolR, abstol = S.atolR)
+		prob_all = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), L.u0, G.tspan, 
+					p, saveat = G.tsteps, reltol = S.rtolR, abstol = S.atolR)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
 	w = ones(S.m,length(L.tsteps))
 	L = loss_args(L.u0,prob,predict,L.tsteps,w,L.f,L.init_on,L.rand_offset,L.noise_wait)
-	A = all_time(prob_all, tsteps_all)
+	A = all_time(prob_all, G.tsteps)
 	return w, L, A
 end
 
@@ -369,8 +369,10 @@ function refine_fit(p, S, L; rate_div=5.0, iter_mult=2.0)
 				" and increasing iterates by ", iter_mult, "\n")
 	rate = S.adm_learn / rate_div
 	iter = S.max_it * iter_mult
-	result = DiffEqFlux.sciml_train(p -> loss(p,S,L), p, ADAM(rate),
-						GalacticOptim.AutoForwardDiff(); cb = callback, maxiters=iter)
+	result = DiffEqFlux.sciml_train(
+					p -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
+					p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+					cb = callback, maxiters=S.max_it)
 	return result.u
 end
 

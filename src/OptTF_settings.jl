@@ -119,7 +119,7 @@ light_prod_rate	= light_mult * p_rate * max_m
 # protein produced at max rate p_prate + from light stimulation at
 # p_prate * light_mult * max_m
 max_p	= p_rate * (1+light_mult) * max_m / low_rate
-switch_level = 1e-3 * p_rate * max_m / low_rate
+switch_level = 1e-2 * p_rate * max_m / low_rate
 
 # values needed in ode_parse_p()
 s = tf_in_num
