@@ -2,7 +2,7 @@
 # Primary goal here is to set bounds on parameters
 # Also, bounds on parameters set bounds on concentration variables.
 # All parameters and variables are non-negative. Each parameter has an upper bound
-# set in OptTF_settings. The rate parameters also have a lower bound, S.low_rate
+# set in OptTF_settings. The rate parameters also have a lower bound, S.[mp]_low_rate
 
 # To set bounds, the method is to allow the parameter vector used for optimization
 # to vary without bounds and to transform raw parameter values into parameters used
@@ -52,10 +52,10 @@ test_range(xmin,xmax,top,offset) =
 function test_param(p,S)
 	P = ode_parse_p(p,S)
 	no_offset = 0.0
-	test_range(P.m_a,S.m_rate,S.low_rate)
-	test_range(P.m_d,S.m_rate,S.low_rate)
-	test_range(P.p_a,S.p_rate,S.low_rate)
-	test_range(P.p_d,S.p_rate,S.low_rate)
+	test_range(P.m_a,S.m_rate,S.m_low_rate)
+	test_range(P.m_d,S.m_rate,S.m_low_rate)
+	test_range(P.p_a,S.p_rate,S.p_low_rate)
+	test_range(P.p_d,S.p_rate,S.p_low_rate)
 	test_range(minimum(P.k),maximum(P.k),S.k,S.k_min)	# need min of min for array of arrays
 	test_range(minimum(P.h),maximum(P.h),S.h,no_offset)
 	test_range(minimum(P.a),maximum(P.a),S.a,no_offset)
@@ -115,13 +115,14 @@ function init_ode_param(u0,S; noise=1e-1)
  	# mRNA equil = u0 for protein * 1e-2; protein equil = u0 for protein
  	# should make constants here in relation to settings, S, otherwise fragile
  	# and will break for changes in m_rate, p_rate
-	p[ddim+1:ddim+n] .= 1.01e-5 .* u0[n+1:2n] .* ones(n) 	# m_a
-	p[ddim+n+1:ddim+2n] .= 1.01e-3 * ones(n)			# m_d
+	p[ddim+1:ddim+n] .= 1.01e-6 .* u0[n+1:2n] .* ones(n) 	# m_a
+	p[ddim+n+1:ddim+2n] .= 1.01e-4 * ones(n)			# m_d
 	p[ddim+2n+1:ddim+3n] .= 1.01e-1 * ones(n)			# p_a
 	p[ddim+3n+1:ddim+4n] .= 1.01e-3 * ones(n)			# p_d
 	
 	# ode_parse adds S.low_rate to rates, so subtract here, change rates to 1/d
-	p[ddim+1:ddim+4n] .= S.s_per_d .* p[ddim+1:ddim+4n] .- (S.low_rate .* ones(4n))
+	p[ddim+1:ddim+2n] .= S.s_per_d .* p[ddim+1:ddim+2n] .- (S.m_low_rate .* ones(2n))
+	p[ddim+2n+1:ddim+4n] .= S.s_per_d .* p[ddim+2n+1:ddim+4n] .- (S.p_low_rate .* ones(2n))
 	@assert minimum(p[ddim+1:ddim+4n]) > 0
 	
 	p[ddim+1:ddim+2n] .= [inverse_lin_sigmoid(p[i]/S.m_rate,d,k1,k2) for i in ddim+1:ddim+2n]

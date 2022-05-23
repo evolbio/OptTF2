@@ -8,11 +8,11 @@ default_ode() = Settings(
 	gr_type = 1,
 	n=4,
 	tf_in_num=3,
-	rtol=1e-5,
-	atol=1e-7,
-	adm_learn=0.02,
-	days =2.0,
-	train_frac=1,
+	rtol=1e-6,
+	atol=1e-8,
+	adm_learn=0.01,
+	days=6.0,
+	train_frac=1/3,
 	max_it=200,
 	opt_dummy_u0 = true,
 	jump = false
@@ -101,9 +101,10 @@ days	= 1.0		# number of circadian cycles
 steps_per_day = 50
 save_incr = 1.0 / steps_per_day 
 
-low_rate = 1e-3 * s_per_d
+m_low_rate = 1e-4 * s_per_d
+p_low_rate = 1e-3 * s_per_d
 # upper bounds
-m_rate 	= 1e-1 * s_per_d
+m_rate 	= 1e-2 * s_per_d
 p_rate 	= 1e0 * s_per_d
 k		= 1e4
 k_min	= 1e2
@@ -111,7 +112,7 @@ h		= 5e0
 a		= 1e0
 r		= 1e1
 p_max	= [m_rate,p_rate,k,h,a,r]
-max_m	= m_rate / low_rate
+max_m	= m_rate / m_low_rate
 # protein production rate in response to light, via fast post-translation
 # modification or allostery, base max rate via mRNA is p_rate * max_m
 # where max_m is max mRNA concentration
@@ -119,8 +120,8 @@ light_mult = 1e0
 light_prod_rate	= light_mult * p_rate * max_m
 # protein produced at max rate p_prate + from light stimulation at
 # p_prate * light_mult * max_m
-max_p	= p_rate * (1+light_mult) * max_m / low_rate
-switch_level = 1e-2 * p_rate * max_m / low_rate
+max_p	= p_rate * (1+light_mult) * max_m / p_low_rate
+switch_level = 1e-2 * p_rate * max_m / p_low_rate
 
 # values needed in ode_parse_p()
 s = tf_in_num
@@ -130,7 +131,7 @@ k1 = d*(1.0+exp(-10.0*d))
 k2 = 10.0*(1.0-d) + log(d/(1.0-d))
 ddim = opt_dummy_u0 ? 2*n : 0
 num_param = ddim+4n+2*n*s+n*N+n*(N - (s+1))
-p_min = calc_pmin(n,s,num_param,ddim,low_rate,k_min)
+p_min = calc_pmin(n,s,num_param,ddim,m_low_rate,p_low_rate,k_min)
 p_mult = calc_pmult(n,s,N,p_max)
 bk = 4n
 bh = bk+n*s
@@ -190,9 +191,10 @@ solver = Tsit5()	# Rodas4P() or Tsit5()
 
 end # struct
 
-function calc_pmin(n,s,pnum,ddim,low_rate,k_min)
+function calc_pmin(n,s,pnum,ddim,m_low_rate,p_low_rate,k_min)
 	p_min = zeros(pnum-ddim)
-	p_min[1:4n] .= low_rate .* ones(4n)
+	p_min[1:2n] .= m_low_rate .* ones(2n)
+	p_min[2n+1:4n] .= p_low_rate .* ones(2n)
 	p_min[4n+1:4n+n*s] .= k_min .* ones(n*s)
 	p_min
 end

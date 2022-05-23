@@ -117,14 +117,17 @@ function ode!(du, u, p, t, S, f, G)
 	# set min on rates m_a, m_d, p_a, p_d, causes top to be p_max + p_min
 	pp .= (pp .* S.p_mult) .+ S.p_min
 
-	#m_a = @view pp[1:n]
-	#m_d = @view pp[n+1:2n]
-	m_a = 1e-2 * ones(n) * S.s_per_d
-	m_d = 1e-4 * ones(n) * S.s_per_d
-	#p_a = @view pp[2n+1:3n]
-	#p_d = @view pp[3n+1:4n]
-	p_a = 1e-1 * ones(n) * S.s_per_d
-	p_d = 1e-3 * ones(n) * S.s_per_d
+	m_a = @view pp[1:n]
+	m_d = @view pp[n+1:2n]
+	p_a = @view pp[2n+1:3n]
+	p_d = @view pp[3n+1:4n]
+	
+	# for testing, set rate parameters to constants, all optimizing via f_val
+	# m_a = 1e-2 * ones(n) * S.s_per_d
+	# m_d = 1e-4 * ones(n) * S.s_per_d
+	# p_a = 1e-1 * ones(n) * S.s_per_d
+	# p_d = 1e-3 * ones(n) * S.s_per_d
+
 	f_val = calc_f(f,pp,u_p,S)
 
 	du[1:n] = m_a .* f_val .- m_d .* u_m		# mRNA level
