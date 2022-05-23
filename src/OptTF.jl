@@ -357,8 +357,8 @@ function setup_refine_fit(p, S, L)
 					p, saveat = G.tsteps, reltol = S.rtolR, abstol = S.atolR)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
-	w = ones(S.m,length(L.tsteps))
-	L = loss_args(L.u0,prob,predict,L.tsteps,w,L.f,L.init_on,L.rand_offset,L.noise_wait)
+	w = ones(length(L.tsteps))
+	L = loss_args(L.u0,prob,predict,L.tsteps,L.hill_k,w,L.f,L.init_on,L.rand_offset,L.noise_wait)
 	A = all_time(prob_all, G.tsteps)
 	return w, L, A
 end
@@ -382,11 +382,12 @@ end
 function refine_fit_bfgs(p, S, L) 
 	println("\nBFGS sometimes suffers instability or gives other warnings")
 	println("If so, then abort and do not use result\n")
-	println("In this case, BFGS fails as do most optimizers in Optim.jl,\n\
-					\tso using NelderMead\n")
+	println("In this case, BFGS may fail as do most optimizers in Optim.jl,\n\
+					\tso if so try using NelderMead\n")
 	result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						# cannot get BFGS() to work, try NelderMead
-						p, Optim.NelderMead(); cb = callback, maxiters=S.max_it)
+						# if cannot get BFGS() to work, try NelderMead
+						p, Optim.BFGS(), GalacticOptim.AutoForwardDiff();
+						cb = callback, maxiters=S.max_it)
 	return result.u
 end
 
