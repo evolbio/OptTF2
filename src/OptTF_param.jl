@@ -45,19 +45,21 @@ function ode_parse_p(p,S)
 	(;m_a, m_d, p_a, p_d, k, h, a, r)			# return named tuple
 end
 
-test_range(x, top) = @assert minimum(x) >= 0 && maximum(x) <= top
-test_range(x, top, offset) = @assert minimum(x) >= offset && maximum(x) <= top+offset
+test_range(x,top,offset) = @assert minimum(x) >= offset && maximum(x) <= top+offset
+test_range(xmin,xmax,top,offset) =
+					@assert minimum(xmin) >= offset && maximum(xmax) <= top+offset
 
 function test_param(p,S)
 	P = ode_parse_p(p,S)
+	no_offset = 0.0
 	test_range(P.m_a,S.m_rate,S.low_rate)
 	test_range(P.m_d,S.m_rate,S.low_rate)
 	test_range(P.p_a,S.p_rate,S.low_rate)
 	test_range(P.p_d,S.p_rate,S.low_rate)
-	test_range(minimum(P.k),S.k)	# need min of min for array of arrays
-	test_range(minimum(P.h),S.h)
-	test_range(minimum(P.a),S.a)
-	if S.tf_in_num > 1 test_range(minimum(P.r),S.r) end
+	test_range(minimum(P.k),maximum(P.k),S.k,S.k_min)	# need min of min for array of arrays
+	test_range(minimum(P.h),maximum(P.h),S.h,no_offset)
+	test_range(minimum(P.a),maximum(P.a),S.a,no_offset)
+	if S.tf_in_num > 1 test_range(minimum(P.r),maximum(P.r),S.r,no_offset) end
 end
 
 # precalculate and pass k1 = d(1+exp(-10d)) and k2 = 10(max-d) + log(d/(max-d))
@@ -127,7 +129,8 @@ function init_ode_param(u0,S; noise=1e-1)
 									for i in ddim+2n+1:ddim+4n]
 	
 	b = ddim+4n
-	p[b+1:b+n*s] .= 5e2 .* ones(n*s)			# k
+	# ode_parse adds S.k_min, so subtract here
+	p[b+1:b+n*s] .= 5e2 .* ones(n*s) .- (S.k_min .* ones(n*s))			# k
 	p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/S.k,d,k1,k2) for i in b+1:b+n*s]
 	
 	b = ddim+4n+n*s

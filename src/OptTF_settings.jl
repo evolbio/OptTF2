@@ -106,6 +106,7 @@ low_rate = 1e-3 * s_per_d
 m_rate 	= 1e-1 * s_per_d
 p_rate 	= 1e0 * s_per_d
 k		= 1e4
+k_min	= 1e2
 h		= 5e0
 a		= 1e0
 r		= 1e1
@@ -129,8 +130,8 @@ k1 = d*(1.0+exp(-10.0*d))
 k2 = 10.0*(1.0-d) + log(d/(1.0-d))
 ddim = opt_dummy_u0 ? 2*n : 0
 num_param = ddim+4n+2*n*s+n*N+n*(N - (s+1))
-p_min = calc_pmin(n,num_param,ddim,low_rate)
-p_mult = calc_pmult(n,s,N,p_min,p_max)
+p_min = calc_pmin(n,s,num_param,ddim,low_rate,k_min)
+p_mult = calc_pmult(n,s,N,p_max)
 bk = 4n
 bh = bk+n*s
 ba = bh+n*s
@@ -189,13 +190,14 @@ solver = Tsit5()	# Rodas4P() or Tsit5()
 
 end # struct
 
-function calc_pmin(n,pnum,ddim,low_rate)
+function calc_pmin(n,s,pnum,ddim,low_rate,k_min)
 	p_min = zeros(pnum-ddim)
 	p_min[1:4n] .= low_rate .* ones(4n)
+	p_min[4n+1:4n+n*s] .= k_min .* ones(n*s)
 	p_min
 end
 
-function calc_pmult(n,s,N,pmin,p_max)::Vector{Float64}
+function calc_pmult(n,s,N,p_max)::Vector{Float64}
 	p_dim = [2n,2n,n*s,n*s,n*N,n*(N-(s+1))]
 	p_mult = []
 	for i in 1:length(p_dim)

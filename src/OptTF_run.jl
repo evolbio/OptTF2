@@ -6,7 +6,7 @@ S = default_ode();
 # L is struct that includes u0, ode_data, tsteps, see struct loss_args for other parts
 # A is struct that includes tsteps_all and prob_all, used if S.train_frac < 1 that
 # splits data into initial training period and later period used to compare w/prediction
-p_opt1,L,A  = fit_diffeq(S;noise=0.1);
+p_opt1,L,A  = fit_diffeq(S;noise=0.5, noise_wait=1000.0);
 
 # If using a subset of data for training, then need L_all with full time period for all data
 # L always refers to training period, which may or may not be all time steps
