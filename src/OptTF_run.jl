@@ -25,26 +25,26 @@ p_opt2 = refine_fit_bfgs(p_opt1,S,L)
 # see definition of refine_fit() for other options to refine fit
 # alternatively, may be options for ode solver and tolerances that would allow bfgs
 
-loss1, _, _, pred1 = loss(p_opt1,S,L);		# use if p_opt2 fails or p_opt1 of interest
-loss2, _, _, pred2 = loss(p_opt2,S,L);
+loss1, _, _, GG1, pred1 = loss(p_opt1,S,L);		# use if p_opt2 fails or p_opt1 of interest
+loss2, _, _, GG2, pred2 = loss(p_opt2,S,L);
 
 use_2 = true;	# set to false if p_opt2 fails, true if p_opt2 is good
 
-p, loss_v, pred = use_2 ? (p_opt2, loss2, pred2) : (p_opt1, loss1, pred1);
+p, loss_v, GG, pred = use_2 ? (p_opt2, loss2, GG2, pred2) : (p_opt1, loss1, GG1, pred1);
 
 # if gradient is of interest
 grad = calc_gradient(p,S,L)
 gnorm = sqrt(sum(abs2, grad))
 
 # save results
-save_data(p, S, L, L_all, loss_v, pred; file=S.out_file)
+save_data(p, S, L, GG, L_all, loss_v, pred; file=S.out_file)
 
 # test loading
 dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "repress-5-4_1.jld2"
+f_name = "circad-4_1.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -57,13 +57,13 @@ rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "repress-5-4_1.jld2"; 						# fill this in with desired file name
+file = "circad-4_1.jld2"; 							# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
 
 # plot final result
-OptTF.callback(dt.p, dt.loss_v, dt.S, dt.L, dt.pred)
+OptTF.callback(dt.p, dt.loss_v, dt.S, dt.L, dt.G, dt.pred)
 
 ###################################################################
 # Load intermediate results

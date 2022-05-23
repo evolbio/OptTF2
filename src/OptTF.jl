@@ -383,7 +383,7 @@ function refine_fit_bfgs(p, S, L)
 	println("\nBFGS sometimes suffers instability or gives other warnings")
 	println("If so, then abort and do not use result\n")
 	println("In this case, BFGS may fail as do most optimizers in Optim.jl,\n\
-					\tso if so try using NelderMead\n")
+					\tif so try using NelderMead\n")
 	result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
 						# if cannot get BFGS() to work, try NelderMead
 						p, Optim.BFGS(), GalacticOptim.AutoForwardDiff();
@@ -395,8 +395,8 @@ end
 # could send tuple rather than naming variables but helps to have
 # named variables here to check that currently required variables are
 # saved
-save_data(p, S, L, L_all, loss_v, pred; file=S.out_file) =
-			jldsave(file; p, S, L, L_all, loss_v, pred)
+save_data(p, S, L, G, L_all, loss_v, pred; file=S.out_file) =
+			jldsave(file; p, S, L, G, L_all, loss_v, pred)
 
 # jld2 stores data as Dict with keys as strings
 # to return named tuple, must first transform to dict with keys as symbols
