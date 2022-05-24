@@ -3,19 +3,19 @@ using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, reset_rseed, recalc_settings
 
 default_ode() = Settings(
-	allow_self = false,
-	batch = 1,
-	gr_type = 1,
-	n=4,
-	tf_in_num=3,
-	rtol=1e-6,
-	atol=1e-8,
-	adm_learn=0.01,
-	days=6.0,
-	train_frac=1/3,
-	max_it=200,
-	opt_dummy_u0 = true,
-	jump = false
+	allow_self 	= false,
+	gr_type 	= 1,
+	n			= 4,
+	tf_in_num	= 3,
+	rtol		= 1e-6,
+	atol		= 1e-8,
+	adm_learn	= 0.01,
+	days		= 6.0,
+	train_frac	= 1/3,
+	max_it		= 200,
+	opt_dummy_u0= true,
+	jump 		= true,
+	batch 		= 12
 )
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
 							actual_seed=set_rand_seed(false,rseed))
