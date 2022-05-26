@@ -46,7 +46,7 @@ end
 
 make_loss_args_all(L::loss_args, A::all_time) =
 					loss_args(L; prob=A.prob_all, tsteps=A.tsteps_all,
-					w=ones(length(L.tsteps)))
+					w=ones(length(A.tsteps_all)))
 
 # Generate function to calculate promoter activation following eq S6 of Marbach10_SI.pdf
 # Use as f=generate_tf_activation_f(s), in which s is number of input TF binding sites
@@ -265,7 +265,8 @@ end
 # noise for jumps for all molecules, offset for circadium cycle,
 # noise_wait for average time in days for loss or gain of external light signal
 function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
-						init_on = false, offset = false, noise_wait = 0.0)
+						init_on = false, offset = false, noise_wait = 0.0,
+						hill_k_init=2.0)
 	S.set_rseed(new_rseed, S.preset_seed)
 	
 	# Need to extract data, tspan, tsteps
@@ -293,7 +294,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		println("Iterate ", i, " of ", length(beta_a))
 		w = weights(S.wt_base^beta_a[i], tsteps, S)
 		# consider alternative way of increasing Hill coeff with iterates
-		hill_k = 2.0# + i/5
+		hill_k = hill_k_init# + i/5
 		last_time = tsteps[length(w)]
 		ts = tsteps[tsteps .<= last_time]
 		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!

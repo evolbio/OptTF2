@@ -6,7 +6,7 @@ S = default_ode();
 # L is struct that includes u0, ode_data, tsteps, see struct loss_args for other parts
 # A is struct that includes tsteps_all and prob_all, used if S.train_frac < 1 that
 # splits data into initial training period and later period used to compare w/prediction
-p_opt1,L,A  = fit_diffeq(S;noise=0.5, noise_wait=1000.0);
+p_opt1,L,A  = fit_diffeq(S;noise=0.5, noise_wait=1000.0, hill_k_init=2.0);
 
 # If using a subset of data for training, then need L_all with full time period for all data
 # L always refers to training period, which may or may not be all time steps
@@ -57,7 +57,7 @@ rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "circad-4_1.jld2"; 							# fill this in with desired file name
+file = "circad-4-3_1.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
@@ -65,21 +65,42 @@ PP=ode_parse_p(dt.p[idx:end],dt.S);
 # plot final result
 OptTF.callback(dt.p, dt.loss_v, dt.S, dt.L, dt.G, dt.pred)
 
+# plot past training period to end of full time period
+loss_all, _, _, G_all, pred_all = loss(dt.p,dt.S,dt.L_all);
+OptTF.callback(dt.p, loss_all, dt.S, dt.L_all, G_all, pred_all)
+
+# alter hill coefficient
+LL = OptTF.loss_args(dt.L; hill_k=50.0);
+OptTF.callback(dt.p, dt.loss_v, dt.S, LL, dt.G, dt.pred)
+
 ###################################################################
 # Load intermediate results
 
-proj_tmp = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
-file = "20220513_045714_66.jld2"; 					# fill this in with desired file name
-dtt = load_data(proj_tmp * file);					# may be warnings for loaded functions
-S = dtt.S;
-idx = S.opt_dummy_u0 ? S.ddim+1 : 1
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
+file = "circad-4_2.jld2"; 							# fill this in with desired file name
+dt = load_data(proj_output * file);					# may be warnings for loaded functions
+S = dt.S;
+idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
 PP=ode_parse_p(dtt.p[idx:end],S);
 
 w, L, A = setup_refine_fit(dtt.p,S,dtt.L);
 p_opt2 = p_opt1 = refine_fit(dtt.p,S,L);
 L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
 
-# now can use commands from first section above
+# now can use commands from other sections
+
+###################################################################
+# refine fit with jumps
+
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
+file = "circad-4_2.jld2"; 							# fill this in with desired file name
+dt = load_data(proj_output * file);					# may be warnings for loaded functions
+S = Settings(dt.S; jump=true, batch=6);
+L = OptTF.loss_args(dt.L; hill_k=50.0);
+
+S = Settings(dt.S; jump=true, batch=6, jump_rate=5e-5 * S.s_per_d, adm_learn=1e-3);
+w, L, A = setup_refine_fit(dt.p,S,L);
+p_opt1 = refine_fit(dt.p,S,L);
 
 ###################################################################
 # Benchmark main calculations

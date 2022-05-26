@@ -7,15 +7,15 @@ default_ode() = Settings(
 	gr_type 	= 1,
 	n			= 4,
 	tf_in_num	= 3,
-	rtol		= 1e-6,
-	atol		= 1e-8,
+	rtol		= 1e-4,
+	atol		= 1e-6,
 	adm_learn	= 0.01,
 	days		= 6.0,
 	train_frac	= 1/3,
 	max_it		= 200,
 	opt_dummy_u0= true,
-	jump 		= true,
-	batch 		= 12
+	jump 		= false,
+	batch 		= 1
 )
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
 							actual_seed=set_rand_seed(false,rseed))
@@ -43,7 +43,7 @@ s_per_d = 86400.0
 
 # stochastic jump
 jump = true
-jump_rate = 5e-3 * s_per_d
+jump_rate = 5e-4 * s_per_d
 
 # fraction of time series to use for training, rest can be used to test prediction
 # truncates training data as train_data[train_data .<= train_frac*train_data[end]]
