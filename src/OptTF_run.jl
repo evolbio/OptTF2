@@ -44,7 +44,7 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "circad-4-3_1.jld2"
+f_name = "circad-4-3_2.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -57,7 +57,7 @@ rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "circad-4-3_1.jld2"; 						# fill this in with desired file name
+file = "circad-4-3_2.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
@@ -154,6 +154,7 @@ bfile = proj_output * train * "bayes-" * file;
 dfile = proj_output * train * file;
 
 dt = load_data(dfile);					# check loaded data vars with keys(dt)
+ff = generate_tf_activation_f(dt.S.tf_in_num);
 
 # If calculating approx bayes posterior, start here
 # If loading previous calculations, skip to load_bayes()
@@ -164,7 +165,6 @@ dt = load_data(dfile);					# check loaded data vars with keys(dt)
 # is small causing large stochastic term, try using pre_λ=1e-1 or other values
 B = pSGLD(warmup=500, sample=1000, a=5e-6, pre_λ=1e-8);
 
-ff = generate_tf_activation_f(dt.S.tf_in_num);
 LL = OptTF.loss_args(dt.L; f=ff);
 
 losses, parameters, ks, ks_times = psgld_sample(dt.p, dt.S, LL, B);

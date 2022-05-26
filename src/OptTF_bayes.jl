@@ -133,41 +133,54 @@ plot_moving_ave(data, n) =
 	display(plot(n/2 .+ Array(1:(length(data)-(n-1))),
 		[sum(@view data[i:(i+n-1)])/n for i in 1:(length(data)-(n-1))]))
 
-function plot_traj_bayes(param, dt; samples=20, labels=true, multi=false,
-			title=false, limits=false)
-	if title
-		pt = (dt.S.use_node) ? "NODE n = " : "ODE n = "
-		pt *= string(dt.S.n)
-		pt *= @sprintf("; loss = %-6.2f",dt.loss_v)		
-	else
-		pt = ""
-	end
-	plt = plot(size=(600,800), layout=(2,1), plot_title=pt)
+function plot_traj_bayes(param, dt; samples=20, show_orig=false)
+	plt = plot(size=(800,400))
 	La = dt.L_all
 	ts = La.tsteps
-	hl = labels ? "hare" : ""
-	ll = labels ? "lynx" : ""
-	tl = labels ? "train" : ""
-	ws = multi ? 2 : 3
-	wp = multi ? 0.75 : 1.5
+	ws = 3
+	wp = 1.5
 	tp = 1.5
+	day = 0.5:1:La.tsteps[end]
+	night = 1:1:La.tsteps[end]
+	log10_yrange = 4
+	log10_switch = log10(dt.S.switch_level)
+	log10_bottom = log10_switch - (log10_yrange / 2)
+	idx = dt.S.n+1	# first protein
+	# for example, 1og10 range of 4 and switch at 1e3 yields range (1e1,1e5)
+	yrange = (10^(log10_switch - log10_yrange/2), 10^(log10_switch + log10_yrange/2))
 	for i in 1:samples 
 		pred = La.predict(param[rand(1:length(param))], La.prob)
-		plot!(ts,pred[1,:], color=mma[2], linewidth=wp, label="", subplot=1,
-					ylims=limits ? (-2.4,1.5) : :auto)
-		plot!(ts,pred[2,:], color=mma[2], linewidth=wp, label="", subplot=2,
-					ylims=limits ? (-1.7,0.9) : :auto)
+		if show_orig
+			plot!(ts,pred[idx,:], color=mma[1], linewidth=wp, label="", 
+					ylims=yrange, yscale=:log10)
+		end
+		output = 10.0.^((log10_yrange-0.1)  	
+						* OptTF.hill.(dt.S.switch_level,dt.L.hill_k,pred[idx,:])
+						.+ (log10_bottom + 0.05) * ones(length(pred)))
+		plot!(plt, ts, output, color=mma[3], yscale=:log10, ylim=yrange, linewidth=0.75,
+						label="")
 	end
-	plot!(ts, La.ode_data[1,:], color=mma[1], linewidth=ws, label=hl, subplot=1)
-	plot!(ts, La.ode_data[2,:], color=mma[3], linewidth=ws, label=ll, subplot=2)
+	# output normalized by hill vs target normalized by hill
+	len = length(dt.G.input_true)
+	target = 10.0.^((log10_yrange-0.1) * OptTF.hill.(0.5,dt.L.hill_k,dt.G.input_true[1:end])
+						.+ (log10_bottom + 0.05) * ones(len))
+	plot!(plt, ts, target, color=mma[2], yscale=:log10, ylim=yrange, linewidth=2, label="")
 	# add vertical line to show end of training
+	if length(day) > 0
+		plot!(day, seriestype =:vline, color = :black, linestyle =:dot, 
+			linewidth=2, label=nothing)
+	end
+	if length(night) > 0
+		plot!(night, seriestype =:vline, color = :black, linestyle =:solid, 
+			linewidth=2, label=nothing)
+	end
+	plot!([dt.S.switch_level], seriestype =:hline, color = :black, linestyle =:dot, 
+			linewidth=2, label=nothing)
 	train_end = length(dt.L.tsteps)
 	all_end = length(ts)
 	if all_end > train_end
-		plot!([ts[train_end]], seriestype =:vline, color = :black, linestyle =:dot,
-					linewidth=tp, label = tl, subplot=1)
-		plot!([ts[train_end]], seriestype =:vline, color = :black, linestyle =:dot,
-					linewidth=tp, label = tl, subplot=2)
+		plot!([ts[train_end]], seriestype =:vline, color = :red, linestyle =:solid,
+					linewidth=tp, label="")
 	end
 	display(plt)
 	return(plt)
