@@ -1,6 +1,6 @@
 using OptTF, OptTF_settings
 
-# see FitODE for additional notes
+# see OptTF for additional notes
 S = default_ode();
 
 # L is struct that includes u0, ode_data, tsteps, see struct loss_args for other parts
@@ -44,7 +44,7 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "circad-4_1.jld2"
+f_name = "circad-4-3_1.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -68,6 +68,9 @@ OptTF.callback(dt.p, dt.loss_v, dt.S, dt.L, dt.G, dt.pred)
 # plot past training period to end of full time period
 loss_all, _, _, G_all, pred_all = loss(dt.p,dt.S,dt.L_all);
 OptTF.callback(dt.p, loss_all, dt.S, dt.L_all, G_all, pred_all)
+
+# optimize over full period
+p_opt3 = refine_fit(dt.p,dt.S,dt.L_all);
 
 # alter hill coefficient
 LL = OptTF.loss_args(dt.L; hill_k=50.0);
@@ -137,5 +140,63 @@ L = OptTF.loss_args(u0,prob,predict,tsteps,hill_k,w,f,false,false,0.0);
 @btime gradient(p->loss(p,S,L)[1], p)[1];	
 
 
+################### Approx Bayes, split training and prediction ##################
+
+using OptTF, OptTF_bayes, OptTF_settings, Plots, StatsPlots
+
+# If reloading data needed
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
+#train_time = "60";						# e.g., "all", "60", "75", etc
+#train = "train_" * train_time * "/"; 	# directory for training period
+train = "";
+file = "circad-4-3_1.jld2"; 				# fill this in with desired file name
+bfile = proj_output * train * "bayes-" * file;
+dfile = proj_output * train * file;
+
+dt = load_data(dfile);					# check loaded data vars with keys(dt)
+
+# If calculating approx bayes posterior, start here
+# If loading previous calculations, skip to load_bayes()
+
+# for NODE or with ODE with n>=4, try lower a, such as 2e-3 or 1e-3 or lower
+# experiment with SGLD parameters, see pSGLD struct in OptTF_bayes
+# If first call to psgld_sample gives large loss, may be that gradient
+# is small causing large stochastic term, try using pre_λ=1e-1 or other values
+B = pSGLD(warmup=500, sample=1000, a=5e-6, pre_λ=1e-8);
+
+ff = generate_tf_activation_f(dt.S.tf_in_num);
+LL = OptTF.loss_args(dt.L; f=ff);
+
+losses, parameters, ks, ks_times = psgld_sample(dt.p, dt.S, LL, B);
+save_bayes(B, losses, parameters, ks, ks_times; file=bfile);
+
+# If loading previous results from psgld_sample(), skip previous three steps
+bt = load_bayes(bfile);					# check loaded data vars with keys(bt)
+
+# look at decay of epsilon over time
+plot_sgld_epsilon(15000; a=bt.B.a, b=bt.B.a, g=bt.B.g)
+
+# plot loss values over time to look for convergence
+plot_moving_ave(bt.losses, 300)
+plot_autocorr(bt.losses, 1:20)		# autocorrelation over given range
+
+# compare density of losses to examine convergence of loss posterior distn
+plot_loss_bayes(bt.losses; skip_frac=0.0, ks_intervals=10)
+
+# parameters
+pr = p_matrix(bt.parameters);		# matrix rows for time and cols for parameter values
+pts = p_ts(bt.parameters,8);		# time series for 8th parameter, change index as needed
+density(pts)						# approx posterior density plot
+
+# autocorr
+autoc = auto_matrix(bt.parameters, 1:30);	# row for parameter and col for autocorr vals
+plot_autocorr(pts, 1:50)			# autocorrelation plot for ts in in pts, range of lags
+plot(autoc[8,:])					# another way to get autocorr plot for 8th parameter
+plot_autocorr_hist(bt.parameters,10)	# distn for 10th lag over all parameters
+
+# trajectories sampled from posterior parameter distn
+
+# delete this, should not be needed, _, _, AA = OptTF.setup_refine_fit(dt.p, dt.S, LL);
+plot_traj_bayes(bt.parameters,dt; samples=20)
 
 
