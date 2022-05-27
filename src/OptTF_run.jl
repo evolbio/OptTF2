@@ -44,7 +44,7 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "circad-4-3_2.jld2"
+f_name = "circad-4-3_5.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -57,7 +57,7 @@ rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "circad-4-3_2.jld2"; 						# fill this in with desired file name
+file = "circad-4-3_4.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
@@ -155,23 +155,40 @@ dfile = proj_output * train * file;
 
 dt = load_data(dfile);					# check loaded data vars with keys(dt)
 ff = generate_tf_activation_f(dt.S.tf_in_num);
+LL = OptTF.loss_args(dt.L; f=ff);
+
+# Train pSGLD on train_frac*days period, with plotting over days
+# For use dt.S.days and dt.S.train_frac for saved values in data file
+S, L, L_all, G = remake_days_train(dt.p, dt.S, LL; days=12, train_frac=1/2);
 
 # If calculating approx bayes posterior, start here
 # If loading previous calculations, skip to load_bayes()
 
-# for NODE or with ODE with n>=4, try lower a, such as 2e-3 or 1e-3 or lower
-# experiment with SGLD parameters, see pSGLD struct in OptTF_bayes
 # If first call to psgld_sample gives large loss, may be that gradient
 # is small causing large stochastic term, try using pre_λ=1e-1 or other values
-B = pSGLD(warmup=500, sample=1000, a=5e-6, pre_λ=1e-8);
+# Good values for a vary, try a=5e-5
+B = pSGLD(warmup=500, sample=1000, a=5e-5, pre_λ=1e-8);
 
-LL = OptTF.loss_args(dt.L; f=ff);
+losses, parameters, ks, ks_times = psgld_sample(dt.p, S, L, B);
 
-losses, parameters, ks, ks_times = psgld_sample(dt.p, dt.S, LL, B);
 save_bayes(B, losses, parameters, ks, ks_times; file=bfile);
 
 # If loading previous results from psgld_sample(), skip previous three steps
 bt = load_bayes(bfile);					# check loaded data vars with keys(bt)
+
+# trajectories sampled from posterior parameter distn
+plot_traj_bayes(bt.parameters, S, L, L_all, G; samples=20)
+
+# plot full dynamics from original parameters
+loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
+OptTF.callback(p, loss_all, S, L_all, G_all, pred_all)
+
+# plot full dynamics from random parameter combination
+p = bt.parameters[rand(1:length(bt.parameters))];
+loss_all, _, _, G_all, pred_all = loss(p,S,L_all);
+OptTF.callback(p, loss_all, S, L_all, G_all, pred_all)
+
+############
 
 # look at decay of epsilon over time
 plot_sgld_epsilon(15000; a=bt.B.a, b=bt.B.a, g=bt.B.g)
@@ -194,9 +211,5 @@ plot_autocorr(pts, 1:50)			# autocorrelation plot for ts in in pts, range of lag
 plot(autoc[8,:])					# another way to get autocorr plot for 8th parameter
 plot_autocorr_hist(bt.parameters,10)	# distn for 10th lag over all parameters
 
-# trajectories sampled from posterior parameter distn
-
-# delete this, should not be needed, _, _, AA = OptTF.setup_refine_fit(dt.p, dt.S, LL);
-plot_traj_bayes(bt.parameters,dt; samples=20)
 
 

@@ -1,9 +1,10 @@
 # copied from FitODE_bayes.jl, then modified
 module OptTF_bayes
-using OptTF, StatsPlots, StatsBase, HypothesisTests, Printf, JLD2, Parameters, ForwardDiff
+using OptTF, OptTF_settings, StatsPlots, StatsBase, HypothesisTests, Printf,
+			JLD2, Parameters, ForwardDiff
 export psgld_sample, save_bayes, load_bayes, plot_loss_bayes, plot_sgld_epsilon,
 			plot_autocorr, plot_moving_ave, p_matrix, p_ts, auto_matrix, plot_traj_bayes,
-			plot_autocorr_hist, pSGLD
+			plot_autocorr_hist, pSGLD, remake_days_train
 			
 @with_kw struct pSGLD
 	warmup =	2000
@@ -13,6 +14,18 @@ export psgld_sample, save_bayes, load_bayes, plot_loss_bayes, plot_sgld_epsilon,
 	g =			0.35
 	pre_beta =	0.9
 	pre_λ =		1e-8
+end
+
+# Reset total days and training days for use in pSGLD
+function remake_days_train(p, S, L; days=12, train_frac=0.5)
+	S = Settings(S; days=(days|>Float64), train_frac=(train_frac|>Float64))
+	ts_all = 0.0:S.save_incr:S.days
+	ts = (S.train_frac < 1) ? ts_all[ts_all .<= S.train_frac*ts_all[end]] : ts_all
+	tmp_L = OptTF.loss_args(L; tsteps=ts)
+	_, L, A = OptTF.setup_refine_fit(p, S, tmp_L)
+	L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
+	G = S.f_data(S)
+	return S, L, L_all, G
 end
 
 # pSGLD, see Rackauckas22.pdf, Bayesian Neural Ordinary Differential Equations
@@ -133,38 +146,38 @@ plot_moving_ave(data, n) =
 	display(plot(n/2 .+ Array(1:(length(data)-(n-1))),
 		[sum(@view data[i:(i+n-1)])/n for i in 1:(length(data)-(n-1))]))
 
-function plot_traj_bayes(param, dt; samples=20, show_orig=false)
-	plt = plot(size=(800,400))
-	La = dt.L_all
-	ts = La.tsteps
+function plot_traj_bayes(param, S, L, L_all, G; samples=20, show_orig=false)
+	plt = plot(size=(1600,400))
+	La = L_all
+	ts = L_all.tsteps
 	ws = 3
 	wp = 1.5
 	tp = 1.5
-	day = 0.5:1:La.tsteps[end]
-	night = 1:1:La.tsteps[end]
+	day = 0.5:1:L_all.tsteps[end]
+	night = 1:1:L_all.tsteps[end]
 	log10_yrange = 4
-	log10_switch = log10(dt.S.switch_level)
+	log10_switch = log10(S.switch_level)
 	log10_bottom = log10_switch - (log10_yrange / 2)
-	idx = dt.S.n+1	# first protein
+	idx = S.n+1	# first protein
 	# for example, 1og10 range of 4 and switch at 1e3 yields range (1e1,1e5)
 	yrange = (10^(log10_switch - log10_yrange/2), 10^(log10_switch + log10_yrange/2))
 	for i in 1:samples 
-		pred = La.predict(param[rand(1:length(param))], La.prob)
+		pred = L_all.predict(param[rand(1:length(param))], L_all.prob)
 		if show_orig
 			plot!(ts,pred[idx,:], color=mma[1], linewidth=wp, label="", 
 					ylims=yrange, yscale=:log10)
 		end
 		output = 10.0.^((log10_yrange-0.1)  	
-						* OptTF.hill.(dt.S.switch_level,dt.L.hill_k,pred[idx,:])
+						* OptTF.hill.(S.switch_level,L.hill_k,pred[idx,:])
 						.+ (log10_bottom + 0.05) * ones(length(pred)))
 		plot!(plt, ts, output, color=mma[3], yscale=:log10, ylim=yrange, linewidth=0.75,
 						label="")
 	end
 	# output normalized by hill vs target normalized by hill
-	len = length(dt.G.input_true)
-	target = 10.0.^((log10_yrange-0.1) * OptTF.hill.(0.5,dt.L.hill_k,dt.G.input_true[1:end])
+	len = length(G.input_true)
+	target = 10.0.^((log10_yrange-0.1) * OptTF.hill.(0.5,L.hill_k,G.input_true[1:end])
 						.+ (log10_bottom + 0.05) * ones(len))
-	plot!(plt, ts, target, color=mma[2], yscale=:log10, ylim=yrange, linewidth=2, label="")
+	plot!(plt, ts, target, color=mma[2], yscale=:log10, ylim=yrange, linewidth=3, label="")
 	# add vertical line to show end of training
 	if length(day) > 0
 		plot!(day, seriestype =:vline, color = :black, linestyle =:dot, 
@@ -174,9 +187,9 @@ function plot_traj_bayes(param, dt; samples=20, show_orig=false)
 		plot!(night, seriestype =:vline, color = :black, linestyle =:solid, 
 			linewidth=2, label=nothing)
 	end
-	plot!([dt.S.switch_level], seriestype =:hline, color = :black, linestyle =:dot, 
+	plot!([S.switch_level], seriestype =:hline, color = :black, linestyle =:dot, 
 			linewidth=2, label=nothing)
-	train_end = length(dt.L.tsteps)
+	train_end = length(L.tsteps)
 	all_end = length(ts)
 	if all_end > train_end
 		plot!([ts[train_end]], seriestype =:vline, color = :red, linestyle =:solid,

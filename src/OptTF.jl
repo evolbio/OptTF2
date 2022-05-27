@@ -1,5 +1,4 @@
 module OptTF
-#using OptTF_settings
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
 	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures
 include("OptTF_param.jl")
@@ -349,7 +348,7 @@ function setup_refine_fit(p, S, L)
 	predict = setup_diffeq_func(S);
 	G = S.f_data(S);
 	tspan = (L.tsteps[begin], L.tsteps[end])
-	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f), L.u0,
+	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f, G), L.u0,
 					tspan, p, saveat = L.tsteps, reltol = S.rtolR, abstol = S.atolR)
 	if (S.train_frac == 1.0)
 		prob_all = prob

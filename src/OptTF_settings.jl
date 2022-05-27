@@ -2,6 +2,12 @@ module OptTF_settings
 using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, reset_rseed, recalc_settings
 
+# One can initialize and then modify settings as follows
+# S = Settings(S; layer_size=50, activate=3, [ADD OTHER OPTIONS AS NEEDED])
+# S = default_ode()		# default settings for ODE
+# S = Settings(S; opt_dummy_u0 = true, [ADD OTHER OPTIONS AS NEEDED])
+# See docs for Parameters.jl package
+
 default_ode() = Settings(
 	allow_self 	= false,
 	gr_type 	= 1,
@@ -17,6 +23,7 @@ default_ode() = Settings(
 	jump 		= false,
 	batch 		= 1
 )
+
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
 							actual_seed=set_rand_seed(false,rseed))
 
@@ -25,12 +32,6 @@ function set_rand_seed(gen_seed, preset_seed)
 	Random.seed!(rseed)
 	return rseed
 end
-
-# One can initialize and then modify settings as follows
-# S = Settings(S; layer_size=50, activate=3, [ADD OTHER OPTIONS AS NEEDED])
-# S = default_ode()		# default settings for ODE
-# S = Settings(S; opt_dummy_u0 = true, [ADD OTHER OPTIONS AS NEEDED])
-# See docs for Parameters.jl package
 
 @with_kw struct Settings
 
