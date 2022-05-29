@@ -136,6 +136,11 @@ function ode!(du, u, p, t, S, f, G)
 	du[n+2] += S.light_prod_rate * intensity(light)
 end
 
+# for SDE diffusion
+function ode_noise!(du, u, p, t)
+	du .= sqrt.(u)
+end
+
 # for stochastic jumps
 jump_rate(u,p,t,rate) = rate
 function jump_affect!(integrator)

@@ -20,7 +20,8 @@ default_ode() = Settings(
 	train_frac	= 1/3,
 	max_it		= 200,
 	opt_dummy_u0= true,
-	jump 		= false,
+	jump 		= true,
+	diffusion	= true,
 	batch 		= 1
 )
 
@@ -37,14 +38,16 @@ end
 
 # function to generate or load data for fitting
 f_data = generate_circadian
-batch = 6					# parallel loss calculation with batch size of 5
 
 # rates are per second, transform to per day by multiplying by 86400.0 s/d
 s_per_d = 86400.0
 
 # stochastic jump
-jump = true
+jump = false
 jump_rate = 5e-4 * s_per_d
+diffusion = true
+batch = 6						# parallel loss calculation with batching
+@assert (!jump || !diffusion)	# can't have both jump and diffusion in current code
 
 # fraction of time series to use for training, rest can be used to test prediction
 # truncates training data as train_data[train_data .<= train_frac*train_data[end]]
