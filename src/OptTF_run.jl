@@ -44,7 +44,7 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "circad-4-3_5.jld2"
+f_name = "circad-4-4_3.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -57,7 +57,7 @@ rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "circad-4-3_4.jld2"; 						# fill this in with desired file name
+file = "circad-4-4_3.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
@@ -149,7 +149,7 @@ proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 #train_time = "60";						# e.g., "all", "60", "75", etc
 #train = "train_" * train_time * "/"; 	# directory for training period
 train = "";
-file = "circad-4-3_1.jld2"; 				# fill this in with desired file name
+file = "circad-4-4_3.jld2"; 				# fill this in with desired file name
 bfile = proj_output * train * "bayes-" * file;
 dfile = proj_output * train * file;
 
@@ -167,7 +167,7 @@ S, L, L_all, G = remake_days_train(dt.p, dt.S, LL; days=12, train_frac=1/2);
 # If first call to psgld_sample gives large loss, may be that gradient
 # is small causing large stochastic term, try using pre_λ=1e-1 or other values
 # Good values for a vary, try a=5e-5
-B = pSGLD(warmup=500, sample=1000, a=5e-5, pre_λ=1e-8);
+B = pSGLD(warmup=5000, sample=10000, a=5e-5, pre_λ=1e-8);
 
 losses, parameters, ks, ks_times = psgld_sample(dt.p, S, L, B);
 

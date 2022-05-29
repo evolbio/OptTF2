@@ -161,22 +161,22 @@ function plot_traj_bayes(param, S, L, L_all, G; samples=20, show_orig=false)
 	idx = S.n+1	# first protein
 	# for example, 1og10 range of 4 and switch at 1e3 yields range (1e1,1e5)
 	yrange = (10^(log10_switch - log10_yrange/2), 10^(log10_switch + log10_yrange/2))
-	for i in 1:samples 
-		pred = L_all.predict(param[rand(1:length(param))], L_all.prob)
+	for i in 1:samples
+		_, _, _, _, pred = loss(param[rand(1:length(param))],S,L_all)
 		if show_orig
 			plot!(ts,pred[idx,:], color=mma[1], linewidth=wp, label="", 
 					ylims=yrange, yscale=:log10)
 		end
 		output = 10.0.^((log10_yrange-0.1)  	
-						* OptTF.hill.(S.switch_level,L.hill_k,pred[idx,:])
-						.+ (log10_bottom + 0.05) * ones(length(pred)))
+						.* OptTF.hill.(S.switch_level,L.hill_k,pred[idx,:])
+						.+ (log10_bottom + 0.05) .* ones(length(pred[idx,:])))
 		plot!(plt, ts, output, color=mma[3], yscale=:log10, ylim=yrange, linewidth=0.75,
 						label="")
 	end
 	# output normalized by hill vs target normalized by hill
 	len = length(G.input_true)
-	target = 10.0.^((log10_yrange-0.1) * OptTF.hill.(0.5,L.hill_k,G.input_true[1:end])
-						.+ (log10_bottom + 0.05) * ones(len))
+	target = 10.0.^((log10_yrange-0.1) .* OptTF.hill.(0.5,L.hill_k,G.input_true[1:end])
+						.+ (log10_bottom + 0.05) .* ones(len))
 	plot!(plt, ts, target, color=mma[2], yscale=:log10, ylim=yrange, linewidth=3, label="")
 	# add vertical line to show end of training
 	if length(day) > 0
