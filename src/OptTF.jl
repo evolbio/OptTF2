@@ -1,6 +1,6 @@
 module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
-	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures
+	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures, ForwardDiff
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
@@ -136,10 +136,26 @@ function ode!(du, u, p, t, S, f, G)
 	du[n+2] += S.light_prod_rate * intensity(light)
 end
 
+########################
+# noise-related functions
+# if using noise, must call solve only via loss()
+
 # for SDE diffusion
+# When x < 16, set noise so that at 4sd below normal, noise equals size of x
+# should help to avoid very small or negative values resulting from noise
+sqrt_abs(x) = (x > 16.) ? sqrt(x) : abs(x) / 4.
+# sqrt_abs(x,k) = (x < k) ? sqrt_abs(x) : sqrt(k)
+# sqrt_abs(x,k) = (x > k) ? sqrt(x) : abs(x) / sqrt(k)
+# sqrt_abs(x) = (x > 1.0) ? sqrt(x) : 0.0
+# sqrt_abs(x) = sqrt(abs(x))
 function ode_noise!(du, u, p, t)
-	du .= sqrt.(u)
+	du .= sqrt_abs.(u)
 end
+
+# callback setup to handle with negative values
+affect!(integrator) = integrator.u .= abs.(integrator.u) 
+cb_cond(u, t, integrator) = true
+cb_zero = DiscreteCallback(cb_cond, affect!,save_positions=(false,false))
 
 # for stochastic jumps
 jump_rate(u,p,t,rate) = rate
@@ -154,6 +170,9 @@ function jump_prob(prob,S)
 	# do not save soln data at jumps
 	JumpProblem(prob,Direct(),jump,save_positions=(false,false))
 end
+
+# end noise-related items
+#########################
 
 # modified from FitODE.jl
 # m is number of protein dimensions for target pattern
@@ -242,7 +261,17 @@ end
 
 function loss(p, S, L)
 	G = S.f_data(S; init_on=L.init_on, rand_offset=L.rand_offset, noise_wait=L.noise_wait)
-	prob = remake(L.prob, f=(du, u, p, t) -> ode!(du, u, p, t, S, L.f, G))
+	ode_c! = (du, u, p, t) -> ode!(du, u, p, t, S, L.f, G)
+	# for SDE, cannot remake problem, so restate it
+	# if using diffusion or noise, must call solve only via loss()
+	# consider callback=cb_zero to handle issues with negative values
+	if S.diffusion
+		prob = SDEProblem(ode_c!, ode_noise!, L.u0, L.prob.tspan, p,
+						reltol = S.rtol, abstol = S.atol,
+						callback=nothing, saveat = values(L.prob.kwargs).saveat)
+	else
+		prob = remake(L.prob, f=ode_c!)
+	end
 	pred_all = L.predict(p, prob)
 
 	# pick out tracked protein, first protein in system output
@@ -302,8 +331,8 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		last_time = tsteps[length(w)]
 		ts = tsteps[tsteps .<= last_time]
 		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
-		prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f, G), u0,
-						(0.0,last_time), p, saveat = ts,
+		ode_c! = (du, u, p, t) -> ode!(du, u, p, t, S, f, G)
+		prob = ODEProblem(ode_c!, u0, (0.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		# if S.jump prob = jump_prob(prob,S) end
 		L = loss_args(u0,prob,predict,tsteps,hill_k,w,f,init_on,offset,noise_wait)
@@ -353,13 +382,14 @@ function setup_refine_fit(p, S, L)
 	predict = setup_diffeq_func(S);
 	G = S.f_data(S);
 	tspan = (L.tsteps[begin], L.tsteps[end])
-	prob = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f, G), L.u0,
-					tspan, p, saveat = L.tsteps, reltol = S.rtolR, abstol = S.atolR)
+	ode_c! = (du, u, p, t) -> ode!(du, u, p, t, S, f, G)
+	prob = ODEProblem(ode_c!, L.u0, tspan, p, saveat = L.tsteps,
+					reltol = S.rtolR, abstol = S.atolR)
 	if (S.train_frac == 1.0)
 		prob_all = prob
 	else
-		prob_all = ODEProblem((du, u, p, t) -> ode!(du, u, p, t, S, f, G), L.u0, G.tspan, 
-					p, saveat = G.tsteps, reltol = S.rtolR, abstol = S.atolR)
+		prob_all = ODEProblem(ode_c!, L.u0, G.tspan, p, saveat = G.tsteps,
+					reltol = S.rtolR, abstol = S.atolR)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
 	w = ones(length(L.tsteps))

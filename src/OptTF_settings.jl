@@ -20,9 +20,9 @@ default_ode() = Settings(
 	train_frac	= 1/3,
 	max_it		= 200,
 	opt_dummy_u0= true,
-	jump 		= true,
+	jump 		= false,
 	diffusion	= true,
-	batch 		= 1
+	batch 		= 5
 )
 
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
@@ -48,6 +48,7 @@ jump_rate = 5e-4 * s_per_d
 diffusion = true
 batch = 6						# parallel loss calculation with batching
 @assert (!jump || !diffusion)	# can't have both jump and diffusion in current code
+@assert jump || diffusion || (batch == 1)
 
 # fraction of time series to use for training, rest can be used to test prediction
 # truncates training data as train_data[train_data .<= train_frac*train_data[end]]
@@ -184,6 +185,9 @@ wt_incr = 1			# increment for i = 1:wt_incr:wt_steps, see above
 # Alternatively use stiff solver TRBDF2(), slower but more stable.
 # For smaller tolerances, if unstable try Rodas4P().
 # Likely it is oscillatory dynamics that cause the difficulty.
+
+# For SDE, ISSEM is only solver that seems to work, probably because of
+# large size of noise terms
 # 
 # Might need higer adm_learn parameter with stiff solvers, which are
 # more likely to get trapped in local minimum. 
@@ -191,7 +195,7 @@ wt_incr = 1			# increment for i = 1:wt_incr:wt_steps, see above
 # Or maybe the stiff solvers provide less error fluctuation
 # and so need greater learning momentum to shake out of local minima ??
 
-solver = Tsit5()	# Rodas4P() or Tsit5()
+solver = diffusion ? ISSEM() : Tsit5()	# Rodas4P() or Tsit5()
 
 end # struct
 
