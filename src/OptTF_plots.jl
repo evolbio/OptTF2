@@ -61,3 +61,57 @@ function plot_callback(loss_val, S, L, G, pred_all, show_all)
 	end
 	display(plot(plt))
 end
+
+function plot_stoch(p, S, L, G, L_all; samples=20, show_orig=false)
+	plt = plot(size=(1600,400))
+	all_steps = L_all.tsteps
+	ts = all_steps
+	wp = 1.5
+	tp = 1.5
+	day = 0.5:1:all_steps[end]
+	night = 1:1:all_steps[end]
+	log10_yrange = 4
+	log10_switch = log10(S.switch_level)
+	log10_bottom = log10_switch - (log10_yrange / 2)
+	idx = S.n+1	# first protein
+	# for example, 1og10 range of 4 and switch at 1e3 yields range (1e1,1e5)
+	yrange = (10^(log10_switch - log10_yrange/2), 10^(log10_switch + log10_yrange/2))
+	local G_all
+	for i in 1:samples
+		loss_all, _, _, G_all, pred_all = loss(p,S,L_all)
+		if show_orig
+			plot!(ts,pred_all[idx,:], color=mma[1], linewidth=wp, label="", 
+					ylims=yrange, yscale=:log10)
+		end
+		output = 10.0.^((log10_yrange-0.1)  	
+						.* OptTF.hill.(S.switch_level,L.hill_k,pred_all[idx,:])
+						.+ (log10_bottom + 0.05) .* ones(length(pred_all[idx,:])))
+		plot!(plt, ts, output, color=mma[3], yscale=:log10, ylim=yrange, linewidth=0.75,
+						label="")
+	end
+	# output normalized by hill vs target normalized by hill
+	len = length(G_all.input_true)
+	target = 10.0.^((log10_yrange-0.1) .* OptTF.hill.(0.5,L.hill_k,G_all.input_true[1:end])
+						.+ (log10_bottom + 0.05) .* ones(len))
+	plot!(plt, ts, target, color=mma[2], yscale=:log10, ylim=yrange, linewidth=3, label="")
+	# add vertical line to show end of training
+	if length(day) > 0
+		plot!(day, seriestype =:vline, color = :black, linestyle =:dot, 
+			linewidth=2, label=nothing)
+	end
+	if length(night) > 0
+		plot!(night, seriestype =:vline, color = :black, linestyle =:solid, 
+			linewidth=2, label=nothing)
+	end
+	plot!([S.switch_level], seriestype =:hline, color = :black, linestyle =:dot, 
+			linewidth=2, label=nothing)
+	train_end = length(L.tsteps)
+	all_end = length(ts)
+	if all_end > train_end
+		plot!([ts[train_end]], seriestype =:vline, color = :red, linestyle =:solid,
+					linewidth=tp, label="")
+	end
+	display(plt)
+	return(plt)
+end
+

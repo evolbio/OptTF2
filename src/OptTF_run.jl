@@ -32,10 +32,6 @@ use_2 = true;	# set to false if p_opt2 fails, true if p_opt2 is good
 
 p, loss_v, GG, pred = use_2 ? (p_opt2, loss2, GG2, pred2) : (p_opt1, loss1, GG1, pred1);
 
-# if gradient is of interest
-grad = calc_gradient(p,S,L)
-gnorm = sqrt(sum(abs2, grad))
-
 # save results
 save_data(p, S, L, GG, L_all, loss_v, pred; file=S.out_file)
 
@@ -44,14 +40,26 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "circad-4-4_4.jld2"
+f_name = "stoch-4-4_2_t6_h5.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
 rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
 
-# To use following steps, move saved out_file to proj_output using 
-# example in following steps for naming convention
+# if gradient is of interest
+grad = calc_gradient(p,S,L)
+gnorm = sqrt(sum(abs2, grad))
+
+# change time period or training period, retrain
+using OptTF_bayes
+S, L, L_all, G = remake_days_train(p, S, L; days=12, train_frac=1/2);
+p_opt2 = refine_fit(p_opt1,S,L)
+# save as above with different file name
+
+# increase hill_k and retrain
+L = OptTF.loss_args(L; hill_k=5.0);
+p_opt2 = refine_fit(p_opt2,S,L)
+# save as above with different file name
 
 ###################################################################
 # Look at optimized parameters
@@ -73,7 +81,7 @@ OptTF.callback(dt.p, loss_all, dt.S, dt.L_all, G_all, pred_all)
 p_opt3 = refine_fit(dt.p,dt.S,dt.L_all);
 
 # alter hill coefficient
-LL = OptTF.loss_args(dt.L; hill_k=50.0);
+LL = OptTF.loss_args(dt.L; hill_k=5.0);
 OptTF.callback(dt.p, dt.loss_v, dt.S, LL, dt.G, dt.pred)
 
 ###################################################################
@@ -91,6 +99,27 @@ p_opt2 = p_opt1 = refine_fit(dtt.p,S,L);
 L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
 
 # now can use commands from other sections
+
+###################################################################
+# Load tmp results and complete optimization
+
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
+file = "20220530_092808_53.jld2"; 					# fill this in with desired file name
+dt = load_data(proj_output * file);					# may be warnings for loaded functions
+S = dt.S;
+idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
+PP=ode_parse_p(dt.p[idx:end],S);
+
+w, L, A = setup_refine_fit(dt.p,S,dt.L);
+p_opt2 = p_opt1 = refine_fit(dt.p,S,L);
+L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
+
+# change time period or training period
+using OptTF_bayes
+S, L, L_all, G = remake_days_train(dt.p, dt.S, LL; days=12, train_frac=1/2);
+
+# alter hill coefficient
+L = OptTF.loss_args(L; hill_k=5.0);
 
 ###################################################################
 # refine fit with jumps
@@ -138,6 +167,36 @@ L = OptTF.loss_args(u0,prob,predict,tsteps,hill_k,w,f,false,false,0.0);
 
 # uses Zygote, fails sometimes, slower than ForwardDiff for smaller length(p)
 @btime gradient(p->loss(p,S,L)[1], p)[1];	
+
+
+########################### Stochastic runs evaluation ###########################
+
+using OptTF, OptTF_settings, OptTF_bayes, DifferentialEquations
+
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
+file = "stoch-4-4_2_t6_h5.jld2"; 				# fill this in with desired file name
+file = "stoch-4-4_2_t6.jld2"; 				# fill this in with desired file name
+dt = load_data(proj_output * file);				# may be warnings for loaded functions
+ff = generate_tf_activation_f(dt.S.tf_in_num);
+
+# plot deterministic dynamics w/standard callback
+S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
+S, L, L_all, G = remake_days_train(dt.p, S, dt.L; days=2*S.days, train_frac=S.train_frac/2);
+loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
+plot_stoch(dt.p, S, L, G, L_all; samples=1)			# here, this is deterministic
+
+OptTF.callback(dt.p, loss_all, S, L_all, G_all, pred_all)
+
+# plot one stochastic sample run w/standard callback
+loss_all, _, _, G_all, pred_all = loss(dt.p,dt.S,dt.L_all);
+OptTF.callback(dt.p, loss_all, dt.S, dt.L_all, G_all, pred_all)
+
+# plot multiple sample trajectories
+plot_stoch(dt.p, dt.S, dt.L, dt.G, dt.L_all; samples=5)
+
+# plot for longer time period
+S, L, L_all, G = remake_days_train(dt.p, dt.S, dt.L; days=24, train_frac=1/4);
+plot_stoch(dt.p, S, L, G, L_all; samples=5)
 
 
 ################### Approx Bayes, split training and prediction ##################

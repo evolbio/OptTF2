@@ -5,7 +5,7 @@ include("OptTF_param.jl")
 include("OptTF_plots.jl")
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
 			refine_fit_bfgs, refine_fit, setup_refine_fit, loss, save_data, 
-			load_data, ode_parse_p
+			load_data, ode_parse_p, plot_stoch
 
 # Variables may go negative, which throws error. Could add bounds
 # to constrain optimization. But for now sufficient just to rerun
