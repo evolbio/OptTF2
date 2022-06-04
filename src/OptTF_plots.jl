@@ -62,7 +62,7 @@ function plot_callback(loss_val, S, L, G, pred_all, show_all)
 	display(plot(plt))
 end
 
-function plot_stoch(p, S, L, G, L_all; samples=20, show_orig=false)
+function plot_stoch(p, S, L, G, L_all; samples=5, show_orig=false)
 	plt = plot(size=(1600,400))
 	all_steps = L_all.tsteps
 	ts = all_steps
@@ -113,5 +113,43 @@ function plot_stoch(p, S, L, G, L_all; samples=20, show_orig=false)
 	end
 	display(plt)
 	return(plt)
+end
+
+using Interpolations, Roots
+
+# calc deviations for entry into daytime and duration of daytime expression
+function calc_stoch_dev_dur(p, S, L, G, L_all; samples=5)
+	ts = L_all.tsteps
+	deviation = NaN .* ones(samples, Integer(S.days))
+	duration = NaN .* ones(samples, Integer(S.days) - 1)
+	lk = ReentrantLock()
+	Threads.@threads for i in 1:samples
+	#for i in 1:samples
+		_, _, _, _, pred_all = loss(p,S,L_all)
+		output = pred_all[S.n+1,:] .- S.switch_level
+		pred = CubicSplineInterpolation(ts,output)
+		roots = find_zeros(pred, 0.1, ts[end])		# skip zero at time = 0
+		len = length(roots)
+		curr = 0
+		for j in 1:len
+			r = roots[j]
+			if curr < S.days && r < S.days - 1e-2 && pred(r+1e-2) > 0
+				curr += 1
+				lock(lk) do
+					deviation[i,curr] = r - floor(r) - 0.5
+					if curr < S.days && j < len
+						duration[i,curr] = roots[j+1] - r - 0.5
+					end
+				end
+			end
+		end
+	end
+	return deviation, duration
+end
+
+# plot deviations for entry into daytime and duration of daytime expression
+function plot_stoch_dev_dur(p, S, L, G, L_all; samples=5)
+	deviation, duration = calc_stoch_dev_dur(p, S, L, G, L_all; samples=samples)
+	return deviation, duration
 end
 

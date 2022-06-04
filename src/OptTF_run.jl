@@ -175,7 +175,7 @@ using OptTF, OptTF_settings, OptTF_bayes, DifferentialEquations
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 file = "stoch-4-4_2_t6_h5.jld2"; 				# fill this in with desired file name
-file = "stoch-4-4_2_t6.jld2"; 				# fill this in with desired file name
+#file = "stoch-4-4_2_t6.jld2"; 				# fill this in with desired file name
 dt = load_data(proj_output * file);				# may be warnings for loaded functions
 ff = generate_tf_activation_f(dt.S.tf_in_num);
 
@@ -188,16 +188,43 @@ plot_stoch(dt.p, S, L, G, L_all; samples=1)			# here, this is deterministic
 OptTF.callback(dt.p, loss_all, S, L_all, G_all, pred_all)
 
 # plot one stochastic sample run w/standard callback
-loss_all, _, _, G_all, pred_all = loss(dt.p,dt.S,dt.L_all);
-OptTF.callback(dt.p, loss_all, dt.S, dt.L_all, G_all, pred_all)
+S, L, L_all, G = remake_days_train(dt.p, dt.S, dt.L; days=2*dt.S.days,
+										train_frac=dt.S.train_frac/2);
+loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
+OptTF.callback(dt.p, loss_all, S, L_all, G_all, pred_all)
 
 # plot multiple sample trajectories
-plot_stoch(dt.p, dt.S, dt.L, dt.G, dt.L_all; samples=5)
-
-# plot for longer time period
-S, L, L_all, G = remake_days_train(dt.p, dt.S, dt.L; days=24, train_frac=1/4);
 plot_stoch(dt.p, S, L, G, L_all; samples=5)
 
+# plot for longer time period
+S, L, L_all, G = remake_days_train(dt.p, dt.S, dt.L; days=3*dt.S.days, 
+										train_frac=dt.S.train_frac/3);
+plot_stoch(dt.p, S, L, G, L_all; samples=5)
+
+# plot deviations for entry into daytime and duration of daytime expression
+S, L, L_all, G = remake_days_train(dt.p, dt.S, dt.L; days=3*dt.S.days, 
+										train_frac=dt.S.train_frac/3);
+# takes about 3s per sample using 5+1 threads
+deviation, duration = plot_stoch_dev_dur(dt.p, S, L, G, L_all; samples=5);
+
+using Plots, StatsPlots
+
+# plot mean and sd of deviations for time of entry into day state, in hours
+times = 1:length(deviation[1,:]);
+ave = mean.([deviation[:,i]*24 for i in times]);
+sd = std.([deviation[:,i]*24 for i in times]);
+plot(times,ave,label=nothing)
+plot!(times,sd,label=nothing)
+
+# plot mean and sd of duration in day state, in hours of deviation from 12h
+times = 1:length(duration[1,:]);
+ave = mean.([duration[:,i]*24 for i in times]);
+sd = std.([duration[:,i]*24 for i in times]);
+plot(times,ave,label=nothing)
+plot!(times,sd,label=nothing)
+
+# show density of deviations measured in hours
+density(deviation[36,:]*24)
 
 ################### Approx Bayes, split training and prediction ##################
 
