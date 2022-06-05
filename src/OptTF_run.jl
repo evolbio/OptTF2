@@ -298,4 +298,28 @@ plot(autoc[8,:])					# another way to get autocorr plot for 8th parameter
 plot_autocorr_hist(bt.parameters,10)	# distn for 10th lag over all parameters
 
 
+######################## Distributed processing ###############################
+
+using Distributed
+
+# tunnel needed for fisher, not alice, not sure why
+addprocs([("fisher",1)]; exename=`/usr/local/bin/julia`,tunnel=true,
+			env=["JULIA_DEPOT_PATH"=>"/opt/julia","JULIA_NUM_THREADS"=>"6"],
+			exeflags=`--project=/Users/steve/sim/zzOtherLang/julia/projects/OptTF`)
+addprocs([("alice2",1)]; exename=`/usr/local/bin/julia`,
+			env=["JULIA_DEPOT_PATH"=>"/opt/julia","JULIA_NUM_THREADS"=>"6"],
+			exeflags=`--project=/Users/steve/sim/zzOtherLang/julia/projects/OptTF`)
+
+procs()		# rmprocs(NUMBER) or rmprocs([vector of numbers])
+
+@everywhere push!(LOAD_PATH, "src/")
+@everywhere using OptTF, OptTF_settings
+
+# ret = @spawnat PROC_# COMMAND
+# val = fetch(ret)
+
+ret = @spawnat 2 default_ode();
+S = fetch(ret);
+
+ret = @spawnat 2 fit_diffeq(S;noise=0.5, noise_wait=1000.0, hill_k_init=2.0);
 

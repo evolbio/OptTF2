@@ -1,6 +1,7 @@
 module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
-	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures, ForwardDiff
+	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures, ForwardDiff,
+	Distributed
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
@@ -230,7 +231,7 @@ function callback(p, loss_val, S, L, G, pred_all; doplot = true, show_all = true
 		#P = ode_parse_p(p[S.ddim+1:end],S)
 		#display(P.a)
 	end
-	if doplot
+	if doplot && myid() == 1
 		plot_callback(loss_val, S, L, G, pred_all, show_all)
   	end
   	return false
