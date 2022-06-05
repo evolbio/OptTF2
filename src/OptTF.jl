@@ -1,6 +1,7 @@
 module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
-	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures, ForwardDiff
+	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures, ForwardDiff,
+	Optimization
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
@@ -220,7 +221,7 @@ hill(m,k,x) = x^k/(m^k+x^k)
 function callback(p, loss_val, S, L, G, pred_all; doplot = true, show_all = true)
 	# printing gradient takes calculation time, turn off may yield speedup
 	if (S.print_grad)
-		grad = gradient(p->loss(p,S,L)[1], p)[1]
+		grad = ForwardDiff.gradient(p->loss(p,S,L)[1], p)[1]
 		gnorm = sqrt(sum(abs2, grad))
 		println(@sprintf("%5.3e; %5.3e", loss_val, gnorm))
 	else
@@ -360,10 +361,15 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		# For constraints on variables, must use AutoForwardDiff() and add
 		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
-		result = DiffEqFlux.sciml_train(
-					p -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
-					p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
-					cb = callback, maxiters=S.max_it)
+		opt_func = OptimizationFunction(
+			(u,p) -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
+			Optimization.AutoForwardDiff())
+		opt_prob = OptimizationProblem(opt_func, u0, p)
+		result = solve(opt_prob, ADAM(S.adm_learn), cb = callback, maxiters=S.max_it)
+# 		result = DiffEqFlux.sciml_train(
+# 					p -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
+# 					p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+# 					cb = callback, maxiters=S.max_it)
 		
 		iter = @sprintf "_%02d" i
 		tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"

@@ -166,7 +166,7 @@ L = OptTF.loss_args(u0,prob,predict,tsteps,hill_k,w,f,false,false,0.0);
 @btime ForwardDiff.gradient(p->loss(p,S,L)[1], p)[1];
 
 # uses Zygote, fails sometimes, slower than ForwardDiff for smaller length(p)
-@btime gradient(p->loss(p,S,L)[1], p)[1];	
+@btime Zygote.gradient(p->loss(p,S,L)[1], p)[1];	
 
 
 ########################### Stochastic runs evaluation ###########################
@@ -175,7 +175,7 @@ using OptTF, OptTF_settings, OptTF_bayes, DifferentialEquations
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 file = "stoch-4-4_2_t6_h5.jld2"; 				# fill this in with desired file name
-#file = "stoch-4-4_2_t6.jld2"; 				# fill this in with desired file name
+file = "stoch-4-4_2_t6.jld2"; 					# fill this in with desired file name
 dt = load_data(proj_output * file);				# may be warnings for loaded functions
 ff = generate_tf_activation_f(dt.S.tf_in_num);
 
@@ -205,7 +205,7 @@ plot_stoch(dt.p, S, L, G, L_all; samples=5)
 S, L, L_all, G = remake_days_train(dt.p, dt.S, dt.L; days=3*dt.S.days, 
 										train_frac=dt.S.train_frac/3);
 # takes about 3s per sample using 5+1 threads
-deviation, duration = plot_stoch_dev_dur(dt.p, S, L, G, L_all; samples=5);
+deviation, duration = plot_stoch_dev_dur(dt.p, S, L, G, L_all; samples=100);
 
 using Plots, StatsPlots
 

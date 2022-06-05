@@ -124,7 +124,6 @@ function calc_stoch_dev_dur(p, S, L, G, L_all; samples=5)
 	duration = NaN .* ones(samples, Integer(S.days) - 1)
 	lk = ReentrantLock()
 	Threads.@threads for i in 1:samples
-	#for i in 1:samples
 		_, _, _, _, pred_all = loss(p,S,L_all)
 		output = pred_all[S.n+1,:] .- S.switch_level
 		pred = CubicSplineInterpolation(ts,output)
