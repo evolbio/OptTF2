@@ -421,10 +421,11 @@ uuid = "459566f4-90b8-5000-8ac3-15dfb0a30def"
 version = "2.23.0"
 
 [[deps.DiffEqFlux]]
-deps = ["Adapt", "Cassette", "ConsoleProgressMonitor", "DataInterpolations", "DiffEqBase", "DiffEqSensitivity", "DiffResults", "Distributions", "DistributionsAD", "Flux", "ForwardDiff", "LinearAlgebra", "Logging", "LoggingExtras", "NNlib", "Optim", "Optimization", "OptimizationFlux", "OptimizationOptimJL", "OptimizationPolyalgorithms", "Printf", "ProgressLogging", "Random", "RecursiveArrayTools", "Reexport", "Requires", "SciMLBase", "StaticArrays", "TerminalLoggers", "Zygote", "ZygoteRules"]
-git-tree-sha1 = "f99f11d0a6608997e44e21738cba987df9af84df"
+deps = ["Adapt", "Cassette", "ConsoleProgressMonitor", "DataInterpolations", "DiffEqBase", "DiffEqSensitivity", "DiffResults", "Distributions", "DistributionsAD", "Flux", "ForwardDiff", "GalacticFlux", "GalacticOptim", "GalacticOptimJL", "LinearAlgebra", "Logging", "LoggingExtras", "NNlib", "Optim", "Printf", "ProgressLogging", "Random", "RecursiveArrayTools", "Reexport", "Requires", "SciMLBase", "StaticArrays", "TerminalLoggers", "Zygote", "ZygoteRules"]
+git-tree-sha1 = "253e64aa07f3c7fe8d6620a11cf3bad6f821b29a"
+pinned = true
 uuid = "aae7a2af-3d4f-5e19-a356-7da93b79d9d0"
-version = "1.48.0"
+version = "1.47.1"
 
 [[deps.DiffEqJump]]
 deps = ["ArrayInterfaceCore", "DataStructures", "DiffEqBase", "DocStringExtensions", "FunctionWrappers", "Graphs", "LinearAlgebra", "Markdown", "PoissonRandom", "Random", "RandomNumbers", "RecursiveArrayTools", "Reexport", "StaticArrays", "TreeViews", "UnPack"]
@@ -726,11 +727,23 @@ git-tree-sha1 = "1e5490a51b4e9d07e8b04836f6008f46b48aaa87"
 uuid = "d2c73de3-f751-5644-a686-071e5b155ba9"
 version = "0.64.3+0"
 
+[[deps.GalacticFlux]]
+deps = ["Flux", "GalacticOptim", "Printf", "ProgressLogging", "Reexport"]
+git-tree-sha1 = "0fe844beae7d97d8a3ee6dbe56babb037c90d5e9"
+uuid = "08766a1d-66fd-4ddf-8f8a-8b0fccaded3b"
+version = "0.1.0"
+
 [[deps.GalacticOptim]]
 deps = ["ArrayInterfaceCore", "ConsoleProgressMonitor", "DiffResults", "DocStringExtensions", "Logging", "LoggingExtras", "Pkg", "Printf", "ProgressLogging", "Reexport", "Requires", "SciMLBase", "TerminalLoggers"]
 git-tree-sha1 = "6725ceb3d9afbbae9ad08aa7ef206a6ab9559600"
 uuid = "a75be94c-b780-496d-a8a9-0878b188d577"
 version = "3.4.0"
+
+[[deps.GalacticOptimJL]]
+deps = ["GalacticOptim", "Optim", "Reexport"]
+git-tree-sha1 = "79bef23c869ad66189e9f5732bc3647679d4a70a"
+uuid = "9d3c5eb1-403b-401b-8c0f-c11105342e6b"
+version = "0.1.0"
 
 [[deps.GenericSchur]]
 deps = ["LinearAlgebra", "Printf"]
@@ -1405,30 +1418,6 @@ deps = ["ArrayInterfaceCore", "ConsoleProgressMonitor", "DiffResults", "DocStrin
 git-tree-sha1 = "ccba5479434879569cf6bfea0580b4b46d459651"
 uuid = "7f7a1694-90dd-40f0-9382-eb1efda571ba"
 version = "3.6.0"
-
-[[deps.OptimizationFlux]]
-deps = ["Flux", "Optimization", "Printf", "ProgressLogging", "Reexport"]
-git-tree-sha1 = "a2eb4ec758a38ce82ace42b806d341ac0457b604"
-uuid = "253f991c-a7b2-45f8-8852-8b9a9df78a86"
-version = "0.1.0"
-
-[[deps.OptimizationOptimJL]]
-deps = ["Optim", "Optimization", "Reexport", "SparseArrays"]
-git-tree-sha1 = "9f3a70a410b659abe9187b348cf357d1dbaf4257"
-uuid = "36348300-93cb-4f02-beb5-3c3902f8871e"
-version = "0.1.1"
-
-[[deps.OptimizationOptimisers]]
-deps = ["Optimisers", "Optimization", "Printf", "ProgressLogging", "Reexport"]
-git-tree-sha1 = "e2f152fc4adc9a634ca6ec00de2f2500d8642789"
-uuid = "42dfb2eb-d2b4-4451-abcd-913932933ac1"
-version = "0.1.0"
-
-[[deps.OptimizationPolyalgorithms]]
-deps = ["Optimization", "OptimizationOptimJL", "OptimizationOptimisers"]
-git-tree-sha1 = "b4a77f60effaa6d3ce7de3c1d5635ba242acfa6f"
-uuid = "500b13db-7e66-49ce-bda4-eed966be6282"
-version = "0.1.0"
 
 [[deps.Opus_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]

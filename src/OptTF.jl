@@ -1,7 +1,6 @@
 module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
-	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures, ForwardDiff,
-	Optimization
+	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures, ForwardDiff
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
@@ -361,15 +360,20 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		# For constraints on variables, must use AutoForwardDiff() and add
 		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
 		# However, using constraints on parameters instead, which allows Zygote
-		opt_func = OptimizationFunction(
-			(u,p) -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
-			Optimization.AutoForwardDiff())
-		opt_prob = OptimizationProblem(opt_func, u0, p)
-		result = solve(opt_prob, ADAM(S.adm_learn), cb = callback, maxiters=S.max_it)
-# 		result = DiffEqFlux.sciml_train(
-# 					p -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
-# 					p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
-# 					cb = callback, maxiters=S.max_it)
+		
+		# DiffEqFlux v1.48 deprecates sciml_train, suggests using the following
+		# from Optimization.jl, but I could not get it to work, so currently
+		# pinned to DiffEqFlux@1.47.1, check again for updates and then fix.
+		# opt_func = OptimizationFunction(
+		#	(u,p) -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
+		#	Optimization.AutoForwardDiff())
+		# opt_prob = OptimizationProblem(opt_func, u0, p)
+		# result = solve(opt_prob, ADAM(S.adm_learn), cb = callback, maxiters=S.max_it)
+		
+		result = DiffEqFlux.sciml_train(
+					p -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
+					p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
+					cb = callback, maxiters=S.max_it)
 		
 		iter = @sprintf "_%02d" i
 		tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"
