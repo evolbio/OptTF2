@@ -380,6 +380,11 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"
 		p = result.u
 		jldsave(tmp_file; p, S, L)
+		if i > 1
+			iter = @sprintf "_%02d" i-1
+			tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"
+			rm(tmp_file)
+		end
 	end
 	# To prepare for final fitting and calculations, must set prob to full training
 	# period with tspan and tsteps and then redefine loss_args values in L
@@ -420,8 +425,8 @@ function refine_fit(p, S, L; rate_div=5.0, iter_mult=2.0)
 	iter = S.max_it * iter_mult
 	result = DiffEqFlux.sciml_train(
 					p -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
-					p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
-					cb = callback, maxiters=S.max_it)
+					p, ADAM(rate), GalacticOptim.AutoForwardDiff();
+					cb = callback, maxiters=iter)
 	return result.u
 end
 
