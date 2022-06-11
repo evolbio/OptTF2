@@ -41,7 +41,7 @@ keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
 f_name = "stoch-4-4_2_t6_h5.jld2"
-f_name = "circad-3-2_1_t6.jld2"
+f_name = "circad-6-6_1_t6.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -53,7 +53,7 @@ gnorm = sqrt(sum(abs2, grad))
 
 # change time period or training period, retrain
 using OptTF_bayes
-S, L, L_all, G = remake_days_train(p, S, L; days=12, train_frac=1/2);
+S, L, L_all, G = remake_days_train(p_opt1, S, L; days=12, train_frac=1/2);
 p_opt2 = refine_fit(p_opt1,S,L)
 # save as above with different file name
 
@@ -66,7 +66,7 @@ p_opt2 = refine_fit(p_opt2,S,L)
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "circad-3-2_2.jld2"; 						# fill this in with desired file name
+file = "circad-6-6_1.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 idx = dt.S.opt_dummy_u0 ? dt.S.ddim+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
@@ -105,7 +105,7 @@ L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
 # Load tmp results and complete optimization
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
-file = "20220606_132851_43.jld2"; 					# fill this in with desired file name
+file = "20220609_065448.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 S = dt.S;
 idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
@@ -167,6 +167,7 @@ L = OptTF.loss_args(u0,prob,predict,tsteps,hill_k,w,f,false,false,0.0);
 @btime ForwardDiff.gradient(p->loss(p,S,L)[1], p)[1];
 
 # uses Zygote, fails sometimes, slower than ForwardDiff for smaller length(p)
+using Zygote
 @btime Zygote.gradient(p->loss(p,S,L)[1], p)[1];	
 
 
@@ -177,9 +178,10 @@ using OptTF, OptTF_settings, OptTF_bayes, DifferentialEquations
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 file = "stoch-4-4_1_t6_h5.jld2"; 				# fill this in with desired file name
 file = "stoch-4-4_2_t6.jld2"; 					# fill this in with desired file name
-file = "circad-3-2_1_t6.jld2"; 					# fill this in with desired file name
-file = "circad-3-2_2.jld2"; 					# fill this in with desired file name
-#file = "stoch-4-4_3.jld2"; 					# fill this in with desired file name
+file = "circad-6-6_2_t6.jld2"; 					# fill this in with desired file name
+#file = "circad-3-2_3.jld2"; 					# fill this in with desired file name
+#file = "stoch-4-4_1.jld2"; 					# fill this in with desired file name
+#file = "circad-4-4_2_stoch_t6_h5.jld2";
 dt = load_data(proj_output * file);				# may be warnings for loaded functions
 ff = generate_tf_activation_f(dt.S.tf_in_num);
 
@@ -200,8 +202,8 @@ OptTF.callback(dt.p, loss_all, S, L_all, G_all, pred_all)
 plot_stoch(dt.p, S, L, G, L_all; samples=5)
 
 # plot for longer time period
-new_days = 36
-new_train_frac = dt.S.train_frac / (new_days / dt.S.days)
+new_days = 36;
+new_train_frac = dt.S.train_frac / (new_days / dt.S.days);
 S, L, L_all, G = remake_days_train(dt.p, S, dt.L; days=new_days, 
 										train_frac=new_train_frac);
 plot_stoch(dt.p, S, L, G, L_all; samples=5)

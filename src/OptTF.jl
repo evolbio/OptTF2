@@ -1,7 +1,7 @@
 module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
-	Distributions, DiffEqFlux, GalacticOptim, StatsPlots.PlotMeasures, ForwardDiff,
-	Distributed
+	Distributions, StatsPlots.PlotMeasures, Distributed, Optimization, OptimizationFlux,
+	OptimizationOptimJL, ForwardDiff
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
@@ -295,6 +295,18 @@ function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc)
 	w[w .> trunc]
 end
 
+# For constraints on variables, must use AutoForwardDiff() and add
+# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
+# However, using constraints on parameters instead, which allows AutoZygote()
+
+# Zygote may fail depending on variety of issues that might be fixed
+# ForwardDiff more reliable but may be slower
+# Note: my "p" is documentation's "u" and vice versa
+opt_func(S,L) = OptimizationFunction(
+			(p,u) -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
+			Optimization.AutoForwardDiff())
+opt_prob(p,S,L) = OptimizationProblem(opt_func(S,L), p, L.u0)
+
 # new_rseed true uses new seed, false reuses preset_seed
 # noise for jumps for all molecules, offset for circadium cycle,
 # noise_wait for average time in days for loss or gain of external light signal
@@ -351,30 +363,9 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 			#println("gradient = ", gradient(p->loss(p,S,L)[1], p)[1])
 			@assert false
 		end
-		
-		# see https://galacticoptim.sciml.ai/stable/API/optimization_function for
-		# alternative optimization functions, use GalacticOptim. prefix
-		# common choices AutoZygote() and AutoForwardDiff()
-		# Zygote may fail depending on variety of issues that might be fixed
-		# ForwardDiff more reliable but may be slower
-		
-		# For constraints on variables, must use AutoForwardDiff() and add
-		# lb=zeros(2S.n), ub=1e3 .* ones(2S.n),
-		# However, using constraints on parameters instead, which allows Zygote
-		
-		# DiffEqFlux v1.48 deprecates sciml_train, suggests using the following
-		# from Optimization.jl, but I could not get it to work, so currently
-		# pinned to DiffEqFlux@1.47.1, check again for updates and then fix.
-		# opt_func = OptimizationFunction(
-		#	(u,p) -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
-		#	Optimization.AutoForwardDiff())
-		# opt_prob = OptimizationProblem(opt_func, u0, p)
-		# result = solve(opt_prob, ADAM(S.adm_learn), cb = callback, maxiters=S.max_it)
-		
-		result = DiffEqFlux.sciml_train(
-					p -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
-					p, ADAM(S.adm_learn), GalacticOptim.AutoForwardDiff();
-					cb = callback, maxiters=S.max_it)
+				
+		result = solve(opt_prob(p,S,L), ADAM(S.adm_learn), callback = callback,
+						maxiters=S.max_it)
 		
 		iter = @sprintf "_%02d" i
 		tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"
@@ -423,10 +414,7 @@ function refine_fit(p, S, L; rate_div=5.0, iter_mult=2.0)
 				" and increasing iterates by ", iter_mult, "\n")
 	rate = S.adm_learn / rate_div
 	iter = S.max_it * iter_mult
-	result = DiffEqFlux.sciml_train(
-					p -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
-					p, ADAM(rate), GalacticOptim.AutoForwardDiff();
-					cb = callback, maxiters=iter)
+	result = solve(opt_prob(p,S,L), ADAM(rate), callback = callback, maxiters=iter)
 	return result.u
 end
 
@@ -435,10 +423,7 @@ function refine_fit_bfgs(p, S, L)
 	println("If so, then abort and do not use result\n")
 	println("In this case, BFGS may fail as do most optimizers in Optim.jl,\n\
 					\tif so try using NelderMead\n")
-	result = DiffEqFlux.sciml_train(p -> loss(p,S,L),
-						# if cannot get BFGS() to work, try NelderMead
-						p, Optim.BFGS(), GalacticOptim.AutoForwardDiff();
-						cb = callback, maxiters=S.max_it)
+	result = solve(opt_prob(p,S,L), BFGS(), callback = callback, maxiters=S.max_it)
 	return result.u
 end
 
