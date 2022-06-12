@@ -115,6 +115,19 @@ function plot_stoch(p, S, L, G, L_all; samples=5, show_orig=false)
 	return(plt)
 end
 
+# if running on remote with no display, save pdf graphic
+function plot_temp(p, S, L; all_time=false)
+	proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
+	file = S.start_time * ".pdf"
+	if all_time
+		w, L, A = setup_refine_fit(p,S,L);
+		L = (dt.S.train_frac < 1) ? make_loss_args_all(L, A) : L;
+	end
+	lossv, _, _, G, pred = loss(p,S,L);
+	plt = OptTF.plot_callback(lossv, S, L, G, pred, true; no_display=true)
+	savefig(plt, proj_output * file)
+end
+
 using Interpolations, Roots
 
 # calc deviations for entry into daytime and duration of daytime expression

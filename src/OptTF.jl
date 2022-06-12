@@ -233,6 +233,9 @@ function callback(p, loss_val, S, L, G, pred_all; doplot = true, show_all = true
   	return false
 end
 
+# loss_pow is exponent on loss values, default of 2 to square values
+# and thus emphasize the largest deviant. Goal is to reduce variation
+# by penalizing larger deviations more heavily.
 function loss_batch(p, S, L; loss_pow=2)
 	lossv = 0.0
 	pred_all = Vector{Vector{Float64}}(undef,0)
@@ -253,7 +256,7 @@ function loss_batch(p, S, L; loss_pow=2)
 			end
 		end
 	end
-	return lossv, S, L, G_ret, pred_all
+	return lossv^(1/loss_pow), S, L, G_ret, pred_all
 end
 
 function loss(p, S, L)
@@ -367,6 +370,9 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"
 		p = result.u
 		jldsave(tmp_file; p, S, L)
+		if !haskey(ENV, "DISPLAY")		# if running on remote w/no display
+			plot_temp(p, S, L; all_time=false)
+		end
 		if i > 1
 			iter = @sprintf "_%02d" i-1
 			tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"
