@@ -1,4 +1,4 @@
-function plot_callback(loss_val, S, L, G, pred_all, show_all)
+function plot_callback(loss_val, S, L, G, pred_all, show_all; no_display=false)
 	lw = 2
 	len = length(pred_all[1,:])
 	ts = @view L.tsteps[1:len]
@@ -59,7 +59,7 @@ function plot_callback(loss_val, S, L, G, pred_all, show_all)
 				linewidth=2, label=nothing, subplot=subpl)
 		end
 	end
-	display(plot(plt))
+	(no_display) ? (return plt) : display(plot(plt))
 end
 
 function plot_stoch(p, S, L, G, L_all; samples=5, show_orig=false)

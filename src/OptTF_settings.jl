@@ -11,8 +11,8 @@ export Settings, default_ode, reset_rseed, recalc_settings
 default_ode() = Settings(
 	allow_self 	= true,
 	gr_type 	= 1,
-	n			= 3,
-	tf_in_num	= 3,
+	n			= 4,
+	tf_in_num	= 4,
 	rtol		= 1e-4,
 	atol		= 1e-6,
 	adm_learn	= 0.002,
@@ -21,8 +21,8 @@ default_ode() = Settings(
 	max_it		= 200,
 	opt_dummy_u0= true,
 	jump 		= false,
-	diffusion	= false,
-	batch 		= 1
+	diffusion	= true,
+	batch 		= 12
 )
 
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,

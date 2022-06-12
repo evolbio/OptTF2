@@ -226,18 +226,14 @@ function callback(p, loss_val, S, L, G, pred_all; doplot = true, show_all = true
 		println(@sprintf("%5.3e; %5.3e", loss_val, gnorm))
 	else
 		println(@sprintf("%5.3e", loss_val))
-		
-		#println("Loss = ", loss(p,S,L)[1])
-		#P = ode_parse_p(p[S.ddim+1:end],S)
-		#display(P.a)
 	end
-	if doplot && myid() == 1
+	if doplot && myid() == 1 && haskey(ENV,"DISPLAY")
 		plot_callback(loss_val, S, L, G, pred_all, show_all)
   	end
   	return false
 end
 
-function loss_batch(p, S, L)
+function loss_batch(p, S, L; loss_pow=2)
 	lossv = 0.0
 	pred_all = Vector{Vector{Float64}}(undef,0)
 	local G_ret
@@ -246,12 +242,12 @@ function loss_batch(p, S, L)
 		if i < S.batch
 			lval = loss(p,S,L)[1]
 			lock(lk) do
-				lossv += lval
+				lossv += lval^loss_pow
 			end
 		else	# last iterate, pick up data to plot for this call to loss
 			lval, _, _, G, pred = loss(p,S,L)
 			lock(lk) do
-				lossv += lval
+				lossv += lval^loss_pow
 				pred_all = pred
 				G_ret = G
 			end

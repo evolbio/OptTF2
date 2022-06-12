@@ -41,7 +41,7 @@ keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
 f_name = "stoch-4-4_2_t6_h5.jld2"
-f_name = "circad-6-6_1_t6.jld2"
+f_name = "circad-3-3_4_t6.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -105,7 +105,7 @@ L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
 # Load tmp results and complete optimization
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
-file = "20220609_065448.jld2"; 						# fill this in with desired file name
+file = "20220610_170053_12.jld2"; 						# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 S = dt.S;
 idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
@@ -121,6 +121,17 @@ S, L, L_all, G = remake_days_train(dt.p, S, L; days=12, train_frac=1/2);
 
 # alter hill coefficient
 L = OptTF.loss_args(L; hill_k=5.0);
+
+# returns plot, capture in plt then display(plt) or savefig(plt, "file.pdf")
+using Plots
+function plot_temp(file)
+	proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
+	dt = load_data(proj_output * file);
+	w, L, A = setup_refine_fit(dt.p,dt.S,dt.L);
+	L_all = (dt.S.train_frac < 1) ? make_loss_args_all(L, A) : L;
+	loss_all, _, _, G_all, pred_all = loss(dt.p,dt.S,L_all);
+	plt = OptTF.plot_callback(loss_all, dt.S, L_all, G_all, pred_all, true; no_display=true)
+end
 
 ###################################################################
 # refine fit with jumps
@@ -178,7 +189,7 @@ using OptTF, OptTF_settings, OptTF_bayes, DifferentialEquations
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 file = "stoch-4-4_1_t6_h5.jld2"; 				# fill this in with desired file name
 file = "stoch-4-4_2_t6.jld2"; 					# fill this in with desired file name
-file = "circad-6-6_2_t6.jld2"; 					# fill this in with desired file name
+file = "circad-3-3_4_t6.jld2"; 					# fill this in with desired file name
 #file = "circad-3-2_3.jld2"; 					# fill this in with desired file name
 #file = "stoch-4-4_1.jld2"; 					# fill this in with desired file name
 #file = "circad-4-4_2_stoch_t6_h5.jld2";
