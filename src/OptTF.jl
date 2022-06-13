@@ -233,10 +233,10 @@ function callback(p, loss_val, S, L, G, pred_all; doplot = true, show_all = true
   	return false
 end
 
-# loss_pow is exponent on loss values, default of 2 to square values
+# loss_pow is exponent on loss values, value of 2 to square values
 # and thus emphasize the largest deviant. Goal is to reduce variation
-# by penalizing larger deviations more heavily.
-function loss_batch(p, S, L; loss_pow=2)
+# by penalizing larger deviations more heavily. Not clear if that works.
+function loss_batch(p, S, L; loss_pow=1)
 	lossv = 0.0
 	pred_all = Vector{Vector{Float64}}(undef,0)
 	local G_ret
@@ -376,7 +376,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		if i > 1
 			iter = @sprintf "_%02d" i-1
 			tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"
-			rm(tmp_file)
+			rm(tmp_file; force=true)
 		end
 	end
 	# To prepare for final fitting and calculations, must set prob to full training

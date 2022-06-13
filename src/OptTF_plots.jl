@@ -118,7 +118,8 @@ end
 # if running on remote with no display, save pdf graphic
 function plot_temp(p, S, L; all_time=false)
 	proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
-	file = S.start_time * ".pdf"
+	# file = S.start_time * ".pdf"
+	file = "current.pdf"
 	if all_time
 		w, L, A = setup_refine_fit(p,S,L);
 		L = (dt.S.train_frac < 1) ? make_loss_args_all(L, A) : L;

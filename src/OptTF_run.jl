@@ -40,8 +40,8 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "stoch-4-4_2_t6_h5.jld2"
-f_name = "circad-3-3_4_t6.jld2"
+f_name = "stoch-4-4_2_t6.jld2"
+#f_name = "circad-3-3_4_t6.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -66,7 +66,7 @@ p_opt2 = refine_fit(p_opt2,S,L)
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "circad-6-6_1.jld2"; 						# fill this in with desired file name
+file = "circad-4-4_2_stoch_t6_h5.jld2"; 			# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 idx = dt.S.opt_dummy_u0 ? dt.S.ddim+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
@@ -184,17 +184,19 @@ using Zygote
 
 ########################### Stochastic runs evaluation ###########################
 
-using OptTF, OptTF_settings, OptTF_bayes, DifferentialEquations
+using OptTF, OptTF_settings, OptTF_bayes, DifferentialEquations,
+		Plots, StatsPlots, Statistics
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 file = "stoch-4-4_1_t6_h5.jld2"; 				# fill this in with desired file name
-file = "stoch-4-4_2_t6.jld2"; 					# fill this in with desired file name
-file = "circad-3-3_4_t6.jld2"; 					# fill this in with desired file name
+file = "stoch-4-4_1.jld2"; 					# fill this in with desired file name
+#file = "circad-4-4_3_t6.jld2"; 					# fill this in with desired file name
 #file = "circad-3-2_3.jld2"; 					# fill this in with desired file name
-#file = "stoch-4-4_1.jld2"; 					# fill this in with desired file name
-#file = "circad-4-4_2_stoch_t6_h5.jld2";
+#file = "circad-4-4_2_t6.jld2"; 				# fill this in with desired file name
+#file = "../tmp/20220613_095303_27.jld2";
 dt = load_data(proj_output * file);				# may be warnings for loaded functions
 ff = generate_tf_activation_f(dt.S.tf_in_num);
+L = OptTF.loss_args(dt.L; f=ff);
 
 # set analysis to deterministic
 S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
@@ -203,7 +205,7 @@ S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
 S = Settings(dt.S; diffusion=true, batch=5, solver=ISSEM());
 
 # plot dynamics w/standard callback
-S, L, L_all, G = remake_days_train(dt.p, S, dt.L; days=2*S.days, train_frac=S.train_frac/2);
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train_frac/2);
 plot_stoch(dt.p, S, L, G, L_all; samples=1)		# this can be deterministic if set above
 
 loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
@@ -215,14 +217,13 @@ plot_stoch(dt.p, S, L, G, L_all; samples=5)
 # plot for longer time period
 new_days = 36;
 new_train_frac = dt.S.train_frac / (new_days / dt.S.days);
-S, L, L_all, G = remake_days_train(dt.p, S, dt.L; days=new_days, 
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=new_days, 
 										train_frac=new_train_frac);
 plot_stoch(dt.p, S, L, G, L_all; samples=5)
 
 # takes about 3s per sample using 5+1 threads
 deviation, duration = plot_stoch_dev_dur(dt.p, S, L, G, L_all; samples=100);
 
-using Plots, StatsPlots, Statistics
 remove_nan!(v) = filter!(x -> !isnan(x), v)
 
 # plot mean and sd of deviations for time of entry in to daytime, in hours
@@ -240,7 +241,13 @@ plot(times,ave,label=nothing)
 plot!(times,sd,label=nothing)
 
 # show density of deviations measured in hours
-density(deviation[36,:]*24)
+density( deviation[10,:]*24, label="10")
+density!(deviation[20,:]*24, label="20")
+density!(deviation[30,:]*24, label="30")
+
+density( duration[10,:]*24, label="10")
+density!(duration[20,:]*24, label="20")
+density!(duration[30,:]*24, label="30")
 
 ################### Approx Bayes, split training and prediction ##################
 
