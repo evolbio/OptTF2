@@ -62,7 +62,7 @@ function plot_callback(loss_val, S, L, G, pred_all, show_all; no_display=false)
 	(no_display) ? (return plt) : display(plot(plt))
 end
 
-function plot_stoch(p, S, L, G, L_all; samples=5, show_orig=false)
+function plot_stoch(p, S, L, G, L_all; samples=5, show_orig=false, display_plot=true)
 	plt = plot(size=(1600,400))
 	all_steps = L_all.tsteps
 	ts = all_steps
@@ -111,7 +111,7 @@ function plot_stoch(p, S, L, G, L_all; samples=5, show_orig=false)
 		plot!([ts[train_end]], seriestype =:vline, color = :red, linestyle =:solid,
 					linewidth=tp, label="")
 	end
-	display(plt)
+	if display_plot display(plt) end
 	return(plt)
 end
 
@@ -166,3 +166,66 @@ function plot_stoch_dev_dur(p, S, L, G, L_all; samples=5)
 	return deviation, duration
 end
 
+cdf_data(data) = sort(data), (1:length(data))./length(data)
+
+using Logging
+
+# examples
+# save_summary_plots("circad-5-5_1_t6"; samples=1000, plot_dir="/Users/steve/Desktop");
+# save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
+
+function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desktop/plots/")
+	remove_nan!(v) = filter!(x -> !isnan(x), v)
+	println("Making plots for $filebase")
+	proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
+	dt = Logging.with_logger(Logging.NullLogger()) do
+   		load_data(proj_output * filebase * ".jld2");
+	end
+	ff = generate_tf_activation_f(dt.S.tf_in_num);
+	L = loss_args(dt.L; f=ff);
+	S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
+	# plot deterministic dynamics w/standard callback
+	S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train_frac/2);
+	plt = plot_stoch(dt.p, S, L, G, L_all; samples=1, display_plot=false)
+	println(plot_dir)
+	savefig(plt, plot_dir * filebase * "_det_bias.pdf")
+
+	loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
+	plt = OptTF.plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=true)
+	println(plot_dir)
+	savefig(plt, plot_dir * filebase * "_det_dyn.pdf");
+	
+	S = Settings(dt.S; diffusion=true, batch=5, solver=ISSEM());
+	new_days = 36;
+	new_train_frac = dt.S.train_frac / (new_days / dt.S.days);
+	S, L, L_all, G = remake_days_train(dt.p, S, L; days=new_days, 
+											train_frac=new_train_frac);
+	deviation, duration = plot_stoch_dev_dur(dt.p, S, L, G, L_all; samples=samples);
+	
+	# plot mean and sd of deviations for time of entry in to daytime, in hours
+	times = 1:length(deviation[1,:]);
+	ave = mean.([remove_nan!(deviation[:,i])*24 for i in times]);
+	sd = std.([remove_nan!(deviation[:,i])*24 for i in times]);
+	plt = plot(times,ave,label=nothing)
+	plot!(times,sd,label=nothing)
+	savefig(plt, plot_dir * filebase * "_dev_sd.pdf");
+	
+	# plot mean and sd of duration in day state, in hours of deviation from 12h
+	times = 1:length(duration[1,:]);
+	ave = mean.([remove_nan!(duration[:,i])*24 for i in times]);
+	sd = std.([remove_nan!(duration[:,i])*24 for i in times]);
+	plt = plot(times,ave,label=nothing)
+	plot!(times,sd,label=nothing)
+	savefig(plt, plot_dir * filebase * "_dur_sd.pdf");
+	
+	# show cdf measured in hours
+	plt = plot(cdf_data(remove_nan!(deviation[10,:]*24)), label="10")
+	plot!(cdf_data(remove_nan!(deviation[20,:]*24)), label="20")
+	plot!(cdf_data(remove_nan!(deviation[30,:]*24)), label="30")
+	savefig(plt, plot_dir * filebase * "_dev_cdf.pdf");
+
+	plt = plot(cdf_data(remove_nan!(duration[10,:]*24)), label="10")
+	plot!(cdf_data(remove_nan!(duration[20,:]*24)), label="20")
+	plot!(cdf_data(remove_nan!(duration[30,:]*24)), label="30")
+	savefig(plt, plot_dir * filebase * "_dur_cdf.pdf");
+end

@@ -4,7 +4,7 @@ using OptTF, OptTF_settings, StatsPlots, StatsBase, HypothesisTests, Printf,
 			JLD2, Parameters, ForwardDiff
 export psgld_sample, save_bayes, load_bayes, plot_loss_bayes, plot_sgld_epsilon,
 			plot_autocorr, plot_moving_ave, p_matrix, p_ts, auto_matrix, plot_traj_bayes,
-			plot_autocorr_hist, pSGLD, remake_days_train
+			plot_autocorr_hist, pSGLD
 			
 @with_kw struct pSGLD
 	warmup =	2000
@@ -14,18 +14,6 @@ export psgld_sample, save_bayes, load_bayes, plot_loss_bayes, plot_sgld_epsilon,
 	g =			0.35
 	pre_beta =	0.9
 	pre_λ =		1e-8
-end
-
-# Reset total days and training days for use in pSGLD
-function remake_days_train(p, S, L; days=12, train_frac=0.5)
-	S = Settings(S; days=(days|>Float64), train_frac=(train_frac|>Float64))
-	ts_all = 0.0:S.save_incr:S.days
-	ts = (S.train_frac < 1) ? ts_all[ts_all .<= S.train_frac*ts_all[end]] : ts_all
-	tmp_L = OptTF.loss_args(L; tsteps=ts)
-	_, L, A = OptTF.setup_refine_fit(p, S, tmp_L)
-	L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
-	G = S.f_data(S)
-	return S, L, L_all, G
 end
 
 # pSGLD, see Rackauckas22.pdf, Bayesian Neural Ordinary Differential Equations

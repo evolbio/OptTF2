@@ -1,12 +1,17 @@
 module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Plots, Printf, DifferentialEquations,
 	Distributions, StatsPlots.PlotMeasures, Distributed, Optimization, OptimizationFlux,
-	OptimizationOptimJL, ForwardDiff
+	OptimizationOptimJL, ForwardDiff, Statistics
+include("OptTF_settings.jl")
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
+include("OptTF_data.jl")
+using .OptTF_settings
+using .OptTF_data
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
 			refine_fit_bfgs, refine_fit, setup_refine_fit, loss, save_data, 
-			load_data, ode_parse_p, plot_stoch, calc_stoch_dev_dur, plot_stoch_dev_dur
+			load_data, ode_parse_p, plot_stoch, calc_stoch_dev_dur, plot_stoch_dev_dur,
+			save_summary_plots, remake_days_train
 
 # Variables may go negative, which throws error. Could add bounds
 # to constrain optimization. But for now sufficient just to rerun
@@ -47,6 +52,18 @@ end
 make_loss_args_all(L::loss_args, A::all_time) =
 					loss_args(L; prob=A.prob_all, tsteps=A.tsteps_all,
 					w=ones(length(A.tsteps_all)))
+
+# Reset total days and training days
+function remake_days_train(p, S, L; days=12, train_frac=0.5)
+	S = Settings(S; days=(days|>Float64), train_frac=(train_frac|>Float64))
+	ts_all = 0.0:S.save_incr:S.days
+	ts = (S.train_frac < 1) ? ts_all[ts_all .<= S.train_frac*ts_all[end]] : ts_all
+	tmp_L = loss_args(L; tsteps=ts)
+	_, L, A = setup_refine_fit(p, S, tmp_L)
+	L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
+	G = S.f_data(S)
+	return S, L, L_all, G
+end
 
 # Generate function to calculate promoter activation following eq S6 of Marbach10_SI.pdf
 # Use as f=generate_tf_activation_f(s), in which s is number of input TF binding sites

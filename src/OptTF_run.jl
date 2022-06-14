@@ -40,7 +40,7 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "stoch-4-4_2_t6.jld2"
+f_name = "stoch-4-4_3_t6.jld2"
 #f_name = "circad-3-3_4_t6.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
@@ -188,11 +188,11 @@ using OptTF, OptTF_settings, OptTF_bayes, DifferentialEquations,
 		Plots, StatsPlots, Statistics
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "stoch-4-4_1_t6_h5.jld2"; 				# fill this in with desired file name
-file = "stoch-4-4_1.jld2"; 					# fill this in with desired file name
+file = "stoch-4-4_3_t6.jld2"; 					# fill this in with desired file name
+#file = "stoch-4-4_1.jld2"; 					# fill this in with desired file name
 #file = "circad-4-4_3_t6.jld2"; 					# fill this in with desired file name
 #file = "circad-3-2_3.jld2"; 					# fill this in with desired file name
-#file = "circad-4-4_2_t6.jld2"; 				# fill this in with desired file name
+file = "circad-4-4_2_stoch_t6_h5.jld2"; 				# fill this in with desired file name
 #file = "../tmp/20220613_095303_27.jld2";
 dt = load_data(proj_output * file);				# may be warnings for loaded functions
 ff = generate_tf_activation_f(dt.S.tf_in_num);
@@ -240,7 +240,7 @@ sd = std.([remove_nan!(duration[:,i])*24 for i in times]);
 plot(times,ave,label=nothing)
 plot!(times,sd,label=nothing)
 
-# show density of deviations measured in hours
+# show densities measured in hours
 density( deviation[10,:]*24, label="10")
 density!(deviation[20,:]*24, label="20")
 density!(deviation[30,:]*24, label="30")
@@ -248,6 +248,14 @@ density!(deviation[30,:]*24, label="30")
 density( duration[10,:]*24, label="10")
 density!(duration[20,:]*24, label="20")
 density!(duration[30,:]*24, label="30")
+
+
+# examples
+save_summary_plots("circad-5-5_1_t6"; samples=1000, plot_dir="/Users/steve/Desktop");
+
+save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
+
+save_summary_plots.(["circad-3-2_1_t6", "circad-3-2_2_t6", "circad-3-3_1_t6", "circad-3-3_2_t6", "circad-3-3_3_t6", "circad-3-3_4_t6", "circad-4-4_2_t6", "circad-4-4_3_t6", "circad-5-5_1_t6", "circad-6-6_1_t6", "circad-6-6_2_t6", "circad-4-4_2_stoch", "circad-4-4_2_stoch_t6_h5", "stoch-4-4_1", "stoch-4-4_2_t6_h5", "stoch-4-4_3_t6"], samples=1000);
 
 ################### Approx Bayes, split training and prediction ##################
 
