@@ -1,5 +1,7 @@
 module OptTF_settings
-using OptTF_data, Parameters, DifferentialEquations, Dates, Random, StatsBase
+include("OptTF_data.jl")
+using .OptTF_data
+using Parameters, DifferentialEquations, Dates, Random, StatsBase
 export Settings, default_ode, reset_rseed, recalc_settings
 
 # One can initialize and then modify settings as follows
