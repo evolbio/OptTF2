@@ -1,4 +1,4 @@
-using OptTF, OptTF_settings
+using OptTF
 
 # see OptTF for additional notes
 S = default_ode();
@@ -80,7 +80,7 @@ S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train
 plot_stoch(dt.p, S, L, G, L_all; samples=1, display_plot=true) # deterministic or stoch
 
 loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
-OptTF.plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=false)
+plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=false)
 
 # if stochastic then use following
 S = Settings(dt.S; diffusion=true, batch=12, solver=ISSEM());
@@ -129,7 +129,7 @@ S, L, L_all, G = remake_days_train(dt.p, S, L; days=new_days,
 plot_stoch(dt.p, S, L, G, L_all; samples=1, display_plot=true)	# increase samples as needed
 
 loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
-OptTF.plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=false)
+plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=false)
 
 
 ###################################################################
@@ -241,12 +241,12 @@ plot_traj_bayes(bt.parameters, S, L, L_all, G; samples=20)
 
 # plot full dynamics from original parameters
 loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
-OptTF.callback(p, loss_all, S, L_all, G_all, pred_all)
+callback(p, loss_all, S, L_all, G_all, pred_all)
 
 # plot full dynamics from random parameter combination
 p = bt.parameters[rand(1:length(bt.parameters))];
 loss_all, _, _, G_all, pred_all = loss(p,S,L_all);
-OptTF.callback(p, loss_all, S, L_all, G_all, pred_all)
+callback(p, loss_all, S, L_all, G_all, pred_all)
 
 ############
 

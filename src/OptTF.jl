@@ -1,18 +1,21 @@
 module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Printf, DifferentialEquations,
-	Distributed, Optimization, OptimizationFlux, OptimizationOptimJL, ForwardDiff, Statistics
+	Distributed, Optimization, OptimizationFlux, OptimizationOptimJL, ForwardDiff, Statistics,
+	Plots, Distributions
 include("OptTF_settings.jl")
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
 include("OptTF_data.jl")
 using .OptTF_settings
+using .OptTF_plots
 using .OptTF_data
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
 			refine_fit_bfgs, refine_fit, setup_refine_fit, loss, save_data, 
-			load_data, ode_parse_p, plot_stoch, calc_stoch_dev_dur, plot_stoch_dev_dur,
-			save_summary_plots, remake_days_train, loss_args
-export Settings, default_ode, reset_rseed, recalc_settings
-export generate_circadian, circadian_val
+			load_data, remake_days_train, loss_args, callback, mma, hill
+export Settings, default_ode, reset_rseed, recalc_settings	# from OptTF_settings
+export generate_circadian, circadian_val					# from OptTF_data
+export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots
+export ode_parse_p
 
 # Variables may go negative, which throws error. Could add bounds
 # to constrain optimization. But for now sufficient just to rerun

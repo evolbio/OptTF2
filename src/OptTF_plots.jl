@@ -1,5 +1,7 @@
-using Interpolations, Roots, Logging, Distributions, Plots, StatsPlots,
+module OptTF_plots
+using OptTF, Interpolations, Roots, Logging, Distributions, Plots, StatsPlots,
 		StatsPlots.PlotMeasures
+export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots
 
 function plot_callback(loss_val, S, L, G, pred_all, show_all; no_display=false)
 	lw = 2
@@ -238,3 +240,5 @@ function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desk
 	density!(duration[:,30]*24, label="30")
 	savefig(plt, plot_dir * filebase * "_dur_density.pdf")
 end
+
+end	# module
