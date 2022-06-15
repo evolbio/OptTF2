@@ -1,3 +1,6 @@
+module OptTF_param
+using OptTF
+export ode_parse_p, test_param, linear_sigmoid, init_ode_param
 # Functions for managing parameters
 # Primary goal here is to set bounds on parameters
 # Also, bounds on parameters set bounds on concentration variables.
@@ -153,3 +156,5 @@ function init_ode_param(u0,S; noise=1e-1)
 	p .= p .* (1.0 .+ noise.*randn(num_p))
 	return p
 end
+
+end	#module

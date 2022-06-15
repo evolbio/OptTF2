@@ -7,6 +7,7 @@ include("OptTF_param.jl")
 include("OptTF_plots.jl")
 include("OptTF_data.jl")
 using .OptTF_settings
+using .OptTF_param
 using .OptTF_plots
 using .OptTF_data
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
