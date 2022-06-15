@@ -1,3 +1,6 @@
+using Interpolations, Roots, Logging, Distributions, Plots, StatsPlots,
+		StatsPlots.PlotMeasures
+
 function plot_callback(loss_val, S, L, G, pred_all, show_all; no_display=false)
 	lw = 2
 	len = length(pred_all[1,:])
@@ -129,8 +132,6 @@ function plot_temp(p, S, L; all_time=false)
 	savefig(plt, proj_output * file)
 end
 
-using Interpolations, Roots
-
 # calc deviations for entry into daytime and duration of daytime expression
 function calc_stoch_dev_dur(p, S, L, G, L_all; samples=5)
 	ts = L_all.tsteps
@@ -168,10 +169,8 @@ end
 
 cdf_data(data) = sort(data), (1:length(data))./length(data)
 
-using Logging
-
 # examples
-# save_summary_plots("circad-5-5_1_t6"; samples=1000, plot_dir="/Users/steve/Desktop");
+# save_summary_plots("circad-5-5_1_t6"; samples=1000, plot_dir="/Users/steve/Desktop/");
 # save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
 
 function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desktop/plots/")
@@ -187,13 +186,12 @@ function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desk
 	# plot deterministic dynamics w/standard callback
 	S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train_frac/2);
 	plt = plot_stoch(dt.p, S, L, G, L_all; samples=1, display_plot=false)
-	println(plot_dir)
+	display(plt)
 	savefig(plt, plot_dir * filebase * "_det_bias.pdf")
 
 	loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
 	plt = OptTF.plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=true)
-	println(plot_dir)
-	savefig(plt, plot_dir * filebase * "_det_dyn.pdf");
+	savefig(plt, plot_dir * filebase * "_det_dyn.pdf")
 	
 	S = Settings(dt.S; diffusion=true, batch=5, solver=ISSEM());
 	new_days = 36;
@@ -208,7 +206,7 @@ function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desk
 	sd = std.([remove_nan!(deviation[:,i])*24 for i in times]);
 	plt = plot(times,ave,label=nothing)
 	plot!(times,sd,label=nothing)
-	savefig(plt, plot_dir * filebase * "_dev_sd.pdf");
+	savefig(plt, plot_dir * filebase * "_dev_sd.pdf")
 	
 	# plot mean and sd of duration in day state, in hours of deviation from 12h
 	times = 1:length(duration[1,:]);
@@ -216,16 +214,27 @@ function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desk
 	sd = std.([remove_nan!(duration[:,i])*24 for i in times]);
 	plt = plot(times,ave,label=nothing)
 	plot!(times,sd,label=nothing)
-	savefig(plt, plot_dir * filebase * "_dur_sd.pdf");
+	savefig(plt, plot_dir * filebase * "_dur_sd.pdf")
 	
 	# show cdf measured in hours
-	plt = plot(cdf_data(remove_nan!(deviation[10,:]*24)), label="10")
-	plot!(cdf_data(remove_nan!(deviation[20,:]*24)), label="20")
-	plot!(cdf_data(remove_nan!(deviation[30,:]*24)), label="30")
-	savefig(plt, plot_dir * filebase * "_dev_cdf.pdf");
+	plt = plot(cdf_data(remove_nan!(deviation[:,10]*24)), label="10")
+	plot!(cdf_data(remove_nan!(deviation[:,20]*24)), label="20")
+	plot!(cdf_data(remove_nan!(deviation[:,30]*24)), label="30")
+	savefig(plt, plot_dir * filebase * "_dev_cdf.pdf")
 
-	plt = plot(cdf_data(remove_nan!(duration[10,:]*24)), label="10")
-	plot!(cdf_data(remove_nan!(duration[20,:]*24)), label="20")
-	plot!(cdf_data(remove_nan!(duration[30,:]*24)), label="30")
-	savefig(plt, plot_dir * filebase * "_dur_cdf.pdf");
+	plt = plot(cdf_data(remove_nan!(duration[:,10]*24)), label="10")
+	plot!(cdf_data(remove_nan!(duration[:,20]*24)), label="20")
+	plot!(cdf_data(remove_nan!(duration[:,30,]*24)), label="30")
+	savefig(plt, plot_dir * filebase * "_dur_cdf.pdf")
+	
+	# show densities measured in hours
+	plt = density( deviation[:,10]*24, label="10")
+	density!(deviation[:,20]*24, label="20")
+	density!(deviation[:,30]*24, label="30")
+	savefig(plt, plot_dir * filebase * "_dev_density.pdf")
+
+	plt = density( duration[:,10]*24, label="10")
+	density!(duration[:,20]*24, label="20")
+	density!(duration[:,30]*24, label="30")
+	savefig(plt, plot_dir * filebase * "_dur_density.pdf")
 end

@@ -52,7 +52,6 @@ grad = calc_gradient(p,S,L)
 gnorm = sqrt(sum(abs2, grad))
 
 # change time period or training period, retrain
-using OptTF_bayes
 S, L, L_all, G = remake_days_train(p_opt1, S, L; days=12, train_frac=1/2);
 p_opt2 = refine_fit(p_opt1,S,L)
 # save as above with different file name
@@ -63,78 +62,87 @@ p_opt2 = refine_fit(p_opt2,S,L)
 # save as above with different file name
 
 ###################################################################
+# Load results and complete optimization
+
+using OptTF, DifferentialEquations
+
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
+basefile = proj_output * "output/stoch-4-4_1";
+dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
+S = dt.S;
+ff = generate_tf_activation_f(dt.S.tf_in_num);
+L = loss_args(dt.L; f=ff);
+
+S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
+
+# look at some plots, not necessary, change days and samples as needed
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train_frac/2);
+plot_stoch(dt.p, S, L, G, L_all; samples=1, display_plot=true) # deterministic or stoch
+
+loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
+OptTF.plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=false)
+
+# if stochastic then use following
+S = Settings(dt.S; diffusion=true, batch=12, solver=ISSEM());
+
+# for fitting to 6 days
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=12, train_frac=1/2);
+
+# optimize and save
+p_opt2 = refine_fit(dt.p,S,L)
+
+loss_v, _, _, GG, pred = loss(p_opt2,S,L);
+save_data(p_opt2, S, L, GG, L_all, loss_v, pred; file=basefile * "_t6.jld2")
+
+# alter hill coefficient, optimize and save
+L = OptTF.loss_args(L; hill_k=5.0);
+p_opt2 = refine_fit(dt.p,S,L)
+
+loss_v, _, _, GG, pred = loss(p_opt2,S,L);
+save_data(p_opt2, S, L, GG, L_all, loss_v, pred; file=basefile * "_t6_h5.jld2")
+
+###################################################################
+# some plots from saved file
+
+using OptTF, DifferentialEquations
+
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
+basefile = proj_output * "output/stoch-4-4_1";
+dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
+S = dt.S;
+ff = generate_tf_activation_f(dt.S.tf_in_num);
+L = loss_args(dt.L; f=ff);
+
+# choose one for deterministic or stochastic plots
+S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
+S = Settings(dt.S; diffusion=true, batch=5, solver=ISSEM());
+
+# set time period
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train_frac/2);
+# alternatively, set fixed period
+new_days = 36;
+new_train_frac = dt.S.train_frac / (new_days / dt.S.days);
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=new_days, 
+										train_frac=new_train_frac);
+
+# plots
+plot_stoch(dt.p, S, L, G, L_all; samples=1, display_plot=true)	# increase samples as needed
+
+loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
+OptTF.plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=false)
+
+
+###################################################################
 # Look at optimized parameters
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "circad-4-4_2_stoch_t6_h5.jld2"; 			# fill this in with desired file name
+file = "stoch-4-4_1.jld2"; 			# fill this in with desired file name
 dt = load_data(proj_output * file);					# may be warnings for loaded functions
 idx = dt.S.opt_dummy_u0 ? dt.S.ddim+1 : 1
 PP=ode_parse_p(dt.p[idx:end],dt.S);
 
-# plot final result
-OptTF.callback(dt.p, dt.loss_v, dt.S, dt.L, dt.G, dt.pred)
-
-# plot past training period to end of full time period
-loss_all, _, _, G_all, pred_all = loss(dt.p,dt.S,dt.L_all);
-OptTF.callback(dt.p, loss_all, dt.S, dt.L_all, G_all, pred_all)
-
-# optimize over full period
-p_opt3 = refine_fit(dt.p,dt.S,dt.L_all);
-
-# alter hill coefficient
-LL = OptTF.loss_args(dt.L; hill_k=5.0);
-OptTF.callback(dt.p, dt.loss_v, dt.S, LL, dt.G, dt.pred)
-
 ###################################################################
-# Load intermediate results
-
-proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "circad-4_2.jld2"; 							# fill this in with desired file name
-dt = load_data(proj_output * file);					# may be warnings for loaded functions
-S = dt.S;
-idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
-PP=ode_parse_p(dtt.p[idx:end],S);
-
-w, L, A = setup_refine_fit(dtt.p,S,dtt.L);
-p_opt2 = p_opt1 = refine_fit(dtt.p,S,L);
-L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
-
-# now can use commands from other sections
-
-###################################################################
-# Load tmp results and complete optimization
-
-proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
-file = "20220610_170053_12.jld2"; 						# fill this in with desired file name
-dt = load_data(proj_output * file);					# may be warnings for loaded functions
-S = dt.S;
-idx = dt.S.opt_dummy_u0 ? S.ddim+1 : 1
-PP=ode_parse_p(dt.p[idx:end],S);
-
-w, L, A = setup_refine_fit(dt.p,S,dt.L);
-p_opt2 = p_opt1 = refine_fit(dt.p,S,L; iter_mult=2.0);
-L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
-
-# change time period or training period
-using OptTF_bayes
-S, L, L_all, G = remake_days_train(dt.p, S, L; days=12, train_frac=1/2);
-
-# alter hill coefficient
-L = OptTF.loss_args(L; hill_k=5.0);
-
-# returns plot, capture in plt then display(plt) or savefig(plt, "file.pdf")
-using Plots
-function plot_temp(file)
-	proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
-	dt = load_data(proj_output * file);
-	w, L, A = setup_refine_fit(dt.p,dt.S,dt.L);
-	L_all = (dt.S.train_frac < 1) ? make_loss_args_all(L, A) : L;
-	loss_all, _, _, G_all, pred_all = loss(dt.p,dt.S,L_all);
-	plt = OptTF.plot_callback(loss_all, dt.S, L_all, G_all, pred_all, true; no_display=true)
-end
-
-###################################################################
-# refine fit with jumps
+# refine fit with jumps [not tested recently]
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 file = "circad-4_2.jld2"; 							# fill this in with desired file name
@@ -184,74 +192,9 @@ using Zygote
 
 ########################### Stochastic runs evaluation ###########################
 
-using OptTF, OptTF_settings, OptTF_bayes, DifferentialEquations,
-		Plots, StatsPlots, Statistics
+# examples using save_summary_plots from OptTF_plots.jl
 
-proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
-file = "stoch-4-4_3_t6.jld2"; 					# fill this in with desired file name
-#file = "stoch-4-4_1.jld2"; 					# fill this in with desired file name
-#file = "circad-4-4_3_t6.jld2"; 					# fill this in with desired file name
-#file = "circad-3-2_3.jld2"; 					# fill this in with desired file name
-file = "circad-4-4_2_stoch_t6_h5.jld2"; 				# fill this in with desired file name
-#file = "../tmp/20220613_095303_27.jld2";
-dt = load_data(proj_output * file);				# may be warnings for loaded functions
-ff = generate_tf_activation_f(dt.S.tf_in_num);
-L = OptTF.loss_args(dt.L; f=ff);
-
-# set analysis to deterministic
-S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
-
-# set analysis to stochastic
-S = Settings(dt.S; diffusion=true, batch=5, solver=ISSEM());
-
-# plot dynamics w/standard callback
-S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train_frac/2);
-plot_stoch(dt.p, S, L, G, L_all; samples=1)		# this can be deterministic if set above
-
-loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
-OptTF.callback(dt.p, loss_all, S, L_all, G_all, pred_all)
-
-# plot multiple sample trajectories, only meaningful for stoch analysis
-plot_stoch(dt.p, S, L, G, L_all; samples=5)
-
-# plot for longer time period
-new_days = 36;
-new_train_frac = dt.S.train_frac / (new_days / dt.S.days);
-S, L, L_all, G = remake_days_train(dt.p, S, L; days=new_days, 
-										train_frac=new_train_frac);
-plot_stoch(dt.p, S, L, G, L_all; samples=5)
-
-# takes about 3s per sample using 5+1 threads
-deviation, duration = plot_stoch_dev_dur(dt.p, S, L, G, L_all; samples=100);
-
-remove_nan!(v) = filter!(x -> !isnan(x), v)
-
-# plot mean and sd of deviations for time of entry in to daytime, in hours
-times = 1:length(deviation[1,:]);
-ave = mean.([remove_nan!(deviation[:,i])*24 for i in times]);
-sd = std.([remove_nan!(deviation[:,i])*24 for i in times]);
-plot(times,ave,label=nothing)
-plot!(times,sd,label=nothing)
-
-# plot mean and sd of duration in day state, in hours of deviation from 12h
-times = 1:length(duration[1,:]);
-ave = mean.([remove_nan!(duration[:,i])*24 for i in times]);
-sd = std.([remove_nan!(duration[:,i])*24 for i in times]);
-plot(times,ave,label=nothing)
-plot!(times,sd,label=nothing)
-
-# show densities measured in hours
-density( deviation[10,:]*24, label="10")
-density!(deviation[20,:]*24, label="20")
-density!(deviation[30,:]*24, label="30")
-
-density( duration[10,:]*24, label="10")
-density!(duration[20,:]*24, label="20")
-density!(duration[30,:]*24, label="30")
-
-
-# examples
-save_summary_plots("circad-5-5_1_t6"; samples=1000, plot_dir="/Users/steve/Desktop");
+save_summary_plots("circad-5-5_1_t6"; samples=10, plot_dir="/Users/steve/Desktop/");
 
 save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
 
