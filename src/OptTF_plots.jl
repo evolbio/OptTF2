@@ -1,6 +1,6 @@
 module OptTF_plots
 using OptTF, Interpolations, Roots, Logging, Distributions, Plots, StatsPlots,
-		StatsPlots.PlotMeasures
+		StatsPlots.PlotMeasures, DifferentialEquations
 export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots
 
 function plot_callback(loss_val, S, L, G, pred_all, show_all; no_display=false)
@@ -229,16 +229,16 @@ function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desk
 	plot!(cdf_data(remove_nan!(duration[:,30,]*24)), label="30")
 	savefig(plt, plot_dir * filebase * "_dur_cdf.pdf")
 	
-	# show densities measured in hours
-	plt = density( deviation[:,10]*24, label="10")
-	density!(deviation[:,20]*24, label="20")
-	density!(deviation[:,30]*24, label="30")
-	savefig(plt, plot_dir * filebase * "_dev_density.pdf")
-
-	plt = density( duration[:,10]*24, label="10")
-	density!(duration[:,20]*24, label="20")
-	density!(duration[:,30]*24, label="30")
-	savefig(plt, plot_dir * filebase * "_dur_density.pdf")
+# 	# show densities measured in hours
+# 	plt = density( deviation[:,10]*24, label="10")
+# 	density!(deviation[:,20]*24, label="20")
+# 	density!(deviation[:,30]*24, label="30")
+# 	savefig(plt, plot_dir * filebase * "_dev_density.pdf")
+# 
+# 	plt = density( duration[:,10]*24, label="10")
+# 	density!(duration[:,20]*24, label="20")
+# 	density!(duration[:,30]*24, label="30")
+# 	savefig(plt, plot_dir * filebase * "_dur_density.pdf")
 end
 
 end	# module

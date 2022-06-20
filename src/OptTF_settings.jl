@@ -23,8 +23,8 @@ default_ode() = Settings(
 	max_it		= 200,
 	opt_dummy_u0= true,
 	jump 		= false,
-	diffusion	= false,
-	batch 		= 1
+	diffusion	= true,
+	batch 		= 12
 )
 
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
@@ -50,7 +50,7 @@ jump_rate = 5e-4 * s_per_d
 diffusion = true
 batch = 6						# parallel loss calculation with batching
 @assert (!jump || !diffusion)	# can't have both jump and diffusion in current code
-@assert jump || diffusion || (batch == 1)
+# @assert jump || diffusion || (batch == 1)		# allow batch > 1 for entrainment
 
 # fraction of time series to use for training, rest can be used to test prediction
 # truncates training data as train_data[train_data .<= train_frac*train_data[end]]

@@ -65,8 +65,12 @@ function plot_circadian_input(input, tsteps)
 end
 
 # continuous values as function of time
-circadian_val(G,t) = ((sin(2π*t+G.offset_value) + 1.0) / 2.0) *
-			(G.noise ? G.breakvalues[searchsortedfirst(G.breakpoints,t*G.steps_per_day)] : 1.0)
+function circadian_val(G,t)
+	first_val = searchsortedfirst(G.breakpoints,t*G.steps_per_day)
+	past_end = (first_val > length(G.breakpoints)) ? true : false
+	((sin(2π*t+G.offset_value) + 1.0) / 2.0) *
+			((G.noise && !past_end) ? G.breakvalues[first_val] : 1.0)
+end
 
 # test continuous circadian_val function
 # G = generate_circadian(S;noise_wait=0.5);

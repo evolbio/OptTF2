@@ -317,7 +317,7 @@ opt_func(S,L) = OptimizationFunction(
 opt_prob(p,S,L) = OptimizationProblem(opt_func(S,L), p, L.u0)
 
 # new_rseed true uses new seed, false reuses preset_seed
-# noise for jumps for all molecules, offset for circadium cycle,
+# noise for stochasticity in initial parameters
 # noise_wait for average time in days for loss or gain of external light signal
 function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 						init_on = false, offset = false, noise_wait = 0.0,

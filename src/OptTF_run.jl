@@ -40,7 +40,7 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "stoch-4-4_3_t6.jld2"
+f_name = "circad-5-5_w2_stoch_1_t6.jld2"
 #f_name = "circad-3-3_4_t6.jld2"
 mv(S.out_file, S.proj_dir * "/output/" * f_name)
 # then delete temporary files
@@ -107,7 +107,7 @@ save_data(p_opt2, S, L, GG, L_all, loss_v, pred; file=basefile * "_t6_h5.jld2")
 using OptTF, DifferentialEquations
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
-basefile = proj_output * "output/stoch-4-4_1";
+basefile = proj_output * "output/circad-5-5_w2_stoch_1_t6";
 dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
 S = dt.S;
 ff = generate_tf_activation_f(dt.S.tf_in_num);
@@ -194,7 +194,7 @@ using Zygote
 
 # examples using save_summary_plots from OptTF_plots.jl
 
-save_summary_plots("circad-5-5_1_t6"; samples=10, plot_dir="/Users/steve/Desktop/");
+save_summary_plots("circad-3-3_5_t6"; samples=1000, plot_dir="/Users/steve/Desktop/");
 
 save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
 
