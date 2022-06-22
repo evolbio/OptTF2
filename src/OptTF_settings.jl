@@ -13,8 +13,8 @@ export Settings, default_ode, reset_rseed, recalc_settings
 default_ode() = Settings(
 	allow_self 	= true,
 	gr_type 	= 1,
-	n			= 3,
-	tf_in_num	= 3,
+	n			= 4,
+	tf_in_num	= 4,
 	rtol		= 1e-4,
 	atol		= 1e-6,
 	adm_learn	= 0.002,

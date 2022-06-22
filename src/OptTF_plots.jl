@@ -1,7 +1,12 @@
 module OptTF_plots
 using OptTF, Interpolations, Roots, Logging, Distributions, Plots, StatsPlots,
 		StatsPlots.PlotMeasures, DifferentialEquations
-export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots
+export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots,
+		plot_tf
+
+# must have file extension
+file_stem(file) = basename(file[1:findlast(isequal('.'),file)])
+file_ext(file) = basename(file[findlast(isequal('.'),file)+1:end])
 
 function plot_callback(loss_val, S, L, G, pred_all, show_all; no_display=false)
 	lw = 2
@@ -186,7 +191,8 @@ function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desk
 	L = loss_args(dt.L; f=ff);
 	S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
 	# plot deterministic dynamics w/standard callback
-	S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train_frac/2);
+	S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, 
+						train_frac=S.train_frac/2);
 	plt = plot_stoch(dt.p, S, L, G, L_all; samples=1, display_plot=false)
 	display(plt)
 	savefig(plt, plot_dir * filebase * "_det_bias.pdf")
@@ -229,6 +235,10 @@ function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desk
 	plot!(cdf_data(remove_nan!(duration[:,30,]*24)), label="30")
 	savefig(plt, plot_dir * filebase * "_dur_cdf.pdf")
 	
+	if (3 <= S.n <= 4)
+		plot_tf(filebase; save_dir=plot_dir, proj_dir=proj_output)
+end
+	
 # 	# show densities measured in hours
 # 	plt = density( deviation[:,10]*24, label="10")
 # 	density!(deviation[:,20]*24, label="20")
@@ -239,6 +249,94 @@ function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desk
 # 	density!(duration[:,20]*24, label="20")
 # 	density!(duration[:,30]*24, label="30")
 # 	savefig(plt, plot_dir * filebase * "_dur_density.pdf")
+end
+
+# plot tf input-output function, file is jld2 from output
+# returns array of plots, size = 1 for S.n=3, size = 4 for S.n = 4
+# to display the first plot: display(OptTF.plot_tf("file.jld2")[1])
+# to save all plots, set save_dir
+function plot_tf(file; save_dir="",
+			proj_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/")
+	if typeof(findlast(isequal('.'),file)) == Nothing
+		file = file * ".jld2"	# add ext if not present, must be .jld2
+	end
+	println("plot_tf for ", file)
+	if save_dir != ""
+		realpath(save_dir)	# test if exists, throws error if not
+		save_base = save_dir * "/" * file_stem(file)
+	end
+	dt = Logging.with_logger(Logging.NullLogger()) do
+		load_data(proj_dir * file)
+	end
+	S = dt.S
+	@assert 3 <= S.n <= 4 "Can plot only for S.n = 3 or 4"
+	
+	f = generate_tf_activation_f(S.tf_in_num)
+	p = S.opt_dummy_u0 ? dt.p[2S.n+1:end] : dt.p
+	pp = OptTF.OptTF_param.linear_sigmoid.(p, S.d, S.k1, S.k2)
+	pp .= (pp .* S.p_mult) .+ S.p_min
+	u_p = [992.2341095, 0.9566634, 1892.6723]
+	b = 10.0
+	d = 0:5
+	d_num = length(d)
+	incr = 0.025
+	xx = 0:incr:5
+	yy = 0:incr:5
+	plt = []
+	if S.n == 3
+		pl = plot(size=(S.n*400,d_num*300),layout=(d_num,S.n),
+				plot_title=file, plot_titlevspan=0.02)
+		for i in 1:S.n
+			for j in d
+				zz = [OptTF.calc_f(f,pp,[b^x,b^y,10^j],S)[i] for x in xx, y in yy]
+				surface!(xx, yy, zz, zrange=(0,1), subplot=i+S.n*j,
+							colorbar=false,
+							xlabel=(j==5) ? "p1" : "", ylabel=(j==5) ? "p2" : "",
+							zlabel=(i==1) ? "p3=$j" : "",
+							title=(j==0) ? "f$i" : "")
+			end
+		end
+		push!(plt,pl)
+	elseif S.n == 4
+		display_plot = false
+		for k in 1:d_num
+			pl = plot(size=(S.n*400,d_num*300),layout=(d_num,S.n),
+				plot_title="p4 = $k: $file", plot_titlevspan=0.02)
+			for i in 1:S.n
+				for j in d
+					zz = [OptTF.calc_f(f,pp,[b^x,b^y,10^j,10^k],S)[i] for x in xx, y in yy]
+					surface!(xx, yy, zz, zrange=(0,1), subplot=i+S.n*j,
+								colorbar=false,
+								xlabel=(j==5) ? "p1" : "", ylabel=(j==5) ? "p2" : "",
+								zlabel=(i==1) ? "p3=$j" : "",
+								title=(j==0) ? "f$i" : "")
+				end
+			end
+			push!(plt, pl)
+		end
+	else
+		@assert false "Should not be here"
+	end
+	if save_dir != ""
+		num_plots = length(plt)
+		compress_cmd = "/Users/steve/bin/pdfcompress.py"
+		if num_plots == 1
+			f = save_base * "_tf.pdf"
+			savefig(plt[1], f)
+			if isfile(compress_cmd) 
+				run(`$compress_cmd -d $f`; wait=false)
+			end
+		else
+			for i in 1:num_plots
+				f = save_base * "_tf_$i.pdf"
+				savefig(plt[i], f)
+				if isfile(compress_cmd) 
+					run(`$compress_cmd -d $f`; wait=false)
+				end
+			end
+		end
+	end
+	return(plt)
 end
 
 end	# module
