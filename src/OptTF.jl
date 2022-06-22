@@ -16,7 +16,7 @@ export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_
 export Settings, default_ode, reset_rseed, recalc_settings	# from OptTF_settings
 export generate_circadian, circadian_val					# from OptTF_data
 export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots,
-			plot_tf
+			plot_tf, plot_percentiles
 export ode_parse_p
 
 # Variables may go negative, which throws error. Could add bounds

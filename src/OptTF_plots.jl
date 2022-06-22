@@ -1,8 +1,8 @@
 module OptTF_plots
 using OptTF, Interpolations, Roots, Logging, Distributions, Plots, StatsPlots,
-		StatsPlots.PlotMeasures, DifferentialEquations
+		StatsPlots.PlotMeasures, DifferentialEquations, DelimitedFiles, Statistics
 export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots,
-		plot_tf
+		plot_tf, plot_percentiles
 
 # must have file extension
 file_stem(file) = basename(file[1:findlast(isequal('.'),file)])
@@ -168,20 +168,19 @@ function calc_stoch_dev_dur(p, S, L, G, L_all; samples=5)
 	return deviation, duration
 end
 
-# plot deviations for entry into daytime and duration of daytime expression
+# return deviations for entry into daytime and duration of daytime expression
 function plot_stoch_dev_dur(p, S, L, G, L_all; samples=5)
 	deviation, duration = calc_stoch_dev_dur(p, S, L, G, L_all; samples=samples)
 	return deviation, duration
 end
 
 cdf_data(data) = sort(data), (1:length(data))./length(data)
+remove_nan!(v) = filter!(x -> !isnan(x), v)
 
 # examples
 # save_summary_plots("circad-5-5_1_t6"; samples=1000, plot_dir="/Users/steve/Desktop/");
 # save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
-
 function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desktop/plots/")
-	remove_nan!(v) = filter!(x -> !isnan(x), v)
 	println("Making plots for $filebase")
 	proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 	dt = Logging.with_logger(Logging.NullLogger()) do
@@ -207,6 +206,9 @@ function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desk
 	S, L, L_all, G = remake_days_train(dt.p, S, L; days=new_days, 
 											train_frac=new_train_frac);
 	deviation, duration = plot_stoch_dev_dur(dt.p, S, L, G, L_all; samples=samples);
+	writedlm(plot_dir * filebase * "_dev_data.dlm", deviation)
+	writedlm(plot_dir * filebase * "_dur_data.dlm", duration)
+	
 	
 	# plot mean and sd of deviations for time of entry in to daytime, in hours
 	times = 1:length(deviation[1,:]);
@@ -337,6 +339,52 @@ function plot_tf(file; save_dir="",
 		end
 	end
 	return(plt)
+end
+
+# plot 5, 25, 50, 75, 95 %iles from delimited data saved in save_summary_plots
+# give single filebase as "basename" or array as ["basename1", "basename2", ...]
+# if array of names, then use plot_percentiles.() for map over names
+# max number of show_days == 3
+function plot_percentiles(filebase; data_dir="/Users/steve/Desktop/plots",
+								plot_dir=data_dir, use_duration=false,
+								show_days=[10,20,30])
+	file_vec = typeof(filebase) == String ? [filebase] : filebase
+	@assert typeof(file_vec) == Vector{String}
+	num_files = length(file_vec)
+	num_show_days = length(show_days)
+	@assert 1 <= num_show_days <= 3 "Cannot have more than 3 show_days"
+	x_incr_files = 1 / (num_files + 1)
+	x_incr_days = if num_show_days == 3
+		[-x_incr_files / 4, 0, x_incr_files / 4]
+	elseif num_show_days == 2
+		[-x_incr_files / 8, x_incr_files / 8]
+	elseif num_show_days == 1
+		[0]
+	else
+		@assert false "Should not be here"
+	end
+	plt = plot(size=(num_files*100,550),xlim=(0,1),ylim=(-8,8),legend=false,
+				grid=true, showaxis=:y, xticks=false, bottom_margin=200px)
+	for i in 1:num_files
+		f = file_vec[i]
+		file_start = data_dir * "/" * f
+		use = use_duration ? "dur" : "dev"
+		file = file_start * "_$use" * "_data.dlm"
+		data = readdlm(file)
+		samples = length(data[:,1])
+		days = length(data[1,:])
+		for j in 1:num_show_days
+			d = show_days[j]
+			@assert d <= days "Total days of $days < requested show day of $d"
+			y = quantile(remove_nan!(data[:,d]),[5,25,50,75,95] ./ 100)*24
+			x = i * x_incr_files + x_incr_days[j]
+			plot!([x,x], [y[1],y[2]], color=:black, linewidth=2)
+			plot!([x,x], [y[4],y[5]], color=:black, linewidth=2)
+			scatter!([x],[y[3]], color=:black)
+		end
+		annotate!(i * x_incr_files, -9.0, Plots.text(f, 11, rotation=-90, :left))
+	end
+	display(plt)
 end
 
 end	# module

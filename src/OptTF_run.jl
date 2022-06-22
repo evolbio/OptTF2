@@ -157,8 +157,8 @@ p_opt1 = refine_fit(dt.p,S,L);
 ###################################################################
 # Benchmark main calculations
 
-using OptTF, OptTF_settings, DifferentialEquations, BenchmarkTools, DiffEqFlux,
-	ForwardDiff, Profile
+using OptTF, DifferentialEquations, BenchmarkTools, ForwardDiff, Profile
+
 S=default_ode();
 
 u0 = (1e4-1e3) * rand(2S.n) .+ (1e3 * ones(2S.n));
@@ -185,9 +185,9 @@ L = OptTF.loss_args(u0,prob,predict,tsteps,hill_k,w,f,false,false,0.0);
 @btime loss(p,S,L)[1];
 @btime ForwardDiff.gradient(p->loss(p,S,L)[1], p)[1];
 
-# uses Zygote, fails sometimes, slower than ForwardDiff for smaller length(p)
-using Zygote
-@btime Zygote.gradient(p->loss(p,S,L)[1], p)[1];	
+# uses Zygote, often fails, slower than ForwardDiff for smaller length(p)
+using Zygote,  DiffEqSensitivity
+@btime Zygote.gradient(p->loss(p,S,L)[1], p)[1];
 
 
 ########################### Stochastic runs evaluation ###########################
