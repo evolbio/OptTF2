@@ -180,7 +180,8 @@ remove_nan!(v) = filter!(x -> !isnan(x), v)
 # examples
 # save_summary_plots("circad-5-5_1_t6"; samples=1000, plot_dir="/Users/steve/Desktop/");
 # save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
-function save_summary_plots(filebase; samples = 100, plot_dir="/Users/steve/Desktop/plots/")
+function save_summary_plots(filebase; samples = 100,
+			plot_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/tmp/")
 	println("Making plots for $filebase")
 	proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 	dt = Logging.with_logger(Logging.NullLogger()) do
@@ -345,9 +346,9 @@ end
 # give single filebase as "basename" or array as ["basename1", "basename2", ...]
 # if array of names, then use plot_percentiles.() for map over names
 # max number of show_days == 3
-function plot_percentiles(filebase; data_dir="/Users/steve/Desktop/plots",
-								plot_dir=data_dir, use_duration=false,
-								show_days=[10,20,30])
+function plot_percentiles(filebase;
+				data_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/plots",
+				use_duration=false, show_days=[10,20,30])
 	file_vec = typeof(filebase) == String ? [filebase] : filebase
 	@assert typeof(file_vec) == Vector{String}
 	num_files = length(file_vec)

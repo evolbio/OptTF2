@@ -279,7 +279,8 @@ function loss(p, S, L)
 	if S.diffusion
 		prob = SDEProblem(ode_c!, ode_noise!, L.u0, L.prob.tspan, p,
 						reltol = S.rtol, abstol = S.atol,
-						callback=nothing, saveat = values(L.prob.kwargs).saveat)
+						callback=nothing, saveat = values(L.prob.kwargs).saveat,
+						maxiters=1e6)
 	else
 		prob = remake(L.prob, f=ode_c!)
 	end

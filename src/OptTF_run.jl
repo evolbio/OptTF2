@@ -198,7 +198,10 @@ save_summary_plots("circad-3-3_5_t6"; samples=1000, plot_dir="/Users/steve/Deskt
 
 save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
 
-save_summary_plots.(["circad-3-2_1_t6", "circad-3-2_2_t6", "circad-3-2_3_t6", "circad-3-3_1_t6", "circad-3-3_2_t6", "circad-3-3_3_t6", "circad-3-3_4_t6", "circad-3-3_5_t6", "circad-4-4_1_t6", "circad-4-4_2_t6", "circad-4-4_3_t6", "circad-5-5_1_t6", "circad-5-5_2_t6", "circad-5-5_3_t6", "circad-5-5_4_t6", "circad-5-5_w2_stoch_1_t6", "circad-6-6_1_t6", "circad-6-6_2_t6", "circad-4-4_2_stoch", "circad-4-4_2_stoch_t6_h5", "stoch-3-3_1_t6", "stoch-3-3_2_t6", "stoch-4-4_1", "stoch-4-4_2_t6_h5", "stoch-4-4_3_t6"], samples=1000);
+save_summary_plots.(["circad-3-2_1_t6", "circad-3-2_2_t6", "circad-3-2_3_t6", "circad-3-3_1_t6", "circad-3-3_2_t6", "circad-3-3_3_t6", "circad-3-3_4_t6", "circad-3-3_5_t6", "circad-4-4_1_t6", "circad-4-4_2_t6", "circad-4-4_3_t6", "circad-5-5_1_t6", "circad-5-5_2_t6", "circad-5-5_3_t6", "circad-5-5_4_t6", "circad-5-5_w2_stoch_1_t6", "circad-6-6_1_t6", "circad-6-6_2_t6", "circad-4-4_2_stoch", "circad-4-4_2_stoch_t6_h5", "stoch-3-3_1_t6", "stoch-3-3_2_t6", "stoch-4-4_2_t6_h5", "stoch-4-4_3_t6"], samples=1000);
+
+# some of the best
+plot_percentiles(["circad-3-2_1_t6", "circad-3-3_5_t6", "circad-4-4_2_t6", "circad-4-4_3_t6", "circad-5-5_3_t6", "circad-6-6_1_t6", "circad-4-4_2_stoch", "circad-4-4_2_stoch_t6_h5", "stoch-3-3_1_t6", "stoch-4-4_2_t6_h5", "stoch-4-4_3_t6"], show_days=[5,10,15])
 
 
 ################### Approx Bayes, split training and prediction ##################
