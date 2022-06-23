@@ -5,7 +5,7 @@ export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_pl
 		plot_tf, plot_percentiles
 
 # must have file extension
-file_stem(file) = basename(file[1:findlast(isequal('.'),file)])
+file_stem(file) = basename(file[1:findlast(isequal('.'),file)-1])
 file_ext(file) = basename(file[findlast(isequal('.'),file)+1:end])
 
 function plot_callback(loss_val, S, L, G, pred_all, show_all; no_display=false)
@@ -364,7 +364,7 @@ function plot_percentiles(filebase; data_dir="/Users/steve/Desktop/plots",
 		@assert false "Should not be here"
 	end
 	plt = plot(size=(num_files*100,550),xlim=(0,1),ylim=(-8,8),legend=false,
-				grid=true, showaxis=:y, xticks=false, bottom_margin=200px)
+				grid=true, showaxis=:y, xticks=false, bottom_margin=150px)
 	for i in 1:num_files
 		f = file_vec[i]
 		file_start = data_dir * "/" * f
@@ -382,6 +382,9 @@ function plot_percentiles(filebase; data_dir="/Users/steve/Desktop/plots",
 			plot!([x,x], [y[4],y[5]], color=:black, linewidth=2)
 			scatter!([x],[y[3]], color=:black)
 		end
+		f = replace(f, "circad" => "C")
+		f = replace(f, "stoch" => "S")
+		f = replace(f, "_t6" => "")
 		annotate!(i * x_incr_files, -9.0, Plots.text(f, 11, rotation=-90, :left))
 	end
 	display(plt)
