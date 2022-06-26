@@ -389,6 +389,7 @@ function plot_percentiles(filebase;
 		annotate!(i * x_incr_files, -9.0, Plots.text(f, 11, rotation=-90, :left))
 	end
 	display(plt)
+	return(plt)
 end
 
 end	# module

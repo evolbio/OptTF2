@@ -62,12 +62,47 @@ p_opt2 = refine_fit(p_opt2,S,L)
 # save as above with different file name
 
 ###################################################################
+# Load tmp file and then save with full jld2 data for plotting
+
+using OptTF, DifferentialEquations
+
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
+basef = "20220625_144545_34";
+basefile = proj_output * basef;
+dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
+S = dt.S;
+ff = generate_tf_activation_f(dt.S.tf_in_num);
+L = loss_args(dt.L; f=ff);
+
+loss_v, _, _, GG, pred = loss(dt.p,S,L);
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=S.days, train_frac=S.train_frac);
+save_data(dt.p, S, L, GG, L_all, loss_v, pred; file= basefile * "_test.jld2")
+
+# plot directory must have "tmp" subdirectory otherwise will fail
+save_summary_plots("../tmp/" * basef * "_test"; samples=1000,
+					plot_dir="/Users/steve/Desktop/plots/tmp/");
+
+plot_percentiles([basef * "_test"]; data_dir="/Users/steve/Desktop/plots/tmp/",
+				use_duration=false, show_days=[10,20,30])
+
+# change noise_wait and redo
+L = loss_args(L; noise_wait=1000.0);
+loss_v, _, _, GG, pred = loss(dt.p,S,L);
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=S.days, train_frac=S.train_frac);
+save_data(dt.p, S, L, GG, L_all, loss_v, pred; file= basefile * "_test_w1000.jld2")
+save_summary_plots("../tmp/" * basef * "_test_w1000"; samples=1000,
+					plot_dir="/Users/steve/Desktop/plots/tmp/");
+
+plot_percentiles([basef * "_test_w1000"]; data_dir="/Users/steve/Desktop/plots/tmp/",
+				use_duration=false, show_days=[10,20,30])
+
+###################################################################
 # Load results and complete optimization
 
 using OptTF, DifferentialEquations
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
-basefile = proj_output * "output/circad-3-3_3_t6";
+basefile = proj_output * "output/stoch-5-5_1_w2";
 dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
 S = dt.S;
 ff = generate_tf_activation_f(dt.S.tf_in_num);
@@ -92,7 +127,7 @@ S, L, L_all, G = remake_days_train(dt.p, S, L; days=12, train_frac=1/2);
 p_opt2 = refine_fit(dt.p,S,L)
 
 loss_v, _, _, GG, pred = loss(p_opt2,S,L);
-save_data(p_opt2, S, L, GG, L_all, loss_v, pred; file=basefile * "_t6.jld2")
+save_data(p_opt2, S, L, GG, L_all, loss_v, pred; file=basefile * ".jld2")
 
 # alter hill coefficient, optimize and save
 L = OptTF.loss_args(L; hill_k=5.0);
