@@ -521,9 +521,9 @@ version = "1.6.0"
 
 [[deps.Enzyme]]
 deps = ["Adapt", "CEnum", "Enzyme_jll", "GPUCompiler", "LLVM", "Libdl", "LinearAlgebra", "ObjectFile", "Printf", "Random"]
-git-tree-sha1 = "6b65e97271ac8de8ffcef0f7ba17ec065e9cc6f5"
+git-tree-sha1 = "d7e6ed04b1ed8fa4993253d10d3e45137c2f6594"
 uuid = "7da242da-08ed-463a-9acd-ee780be4f1d9"
-version = "0.10.1"
+version = "0.10.2"
 
 [[deps.Enzyme_jll]]
 deps = ["Artifacts", "JLLWrappers", "LazyArtifacts", "Libdl", "Pkg", "TOML"]

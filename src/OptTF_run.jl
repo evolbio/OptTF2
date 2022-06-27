@@ -97,12 +97,10 @@ plot_percentiles([basef * "_test_w1000"]; data_dir="/Users/steve/Desktop/plots/t
 				use_duration=false, show_days=[10,20,30])
 
 ###################################################################
-# Load results and complete optimization
-
-using OptTF, DifferentialEquations
+# Load results and complete optimizationusing OptTF, DifferentialEquations
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
-basefile = proj_output * "output/stoch-5-5_1_w2";
+basefile = proj_output * "output/stoch-4-4_1_w2";
 dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
 S = dt.S;
 ff = generate_tf_activation_f(dt.S.tf_in_num);
@@ -124,7 +122,7 @@ S = Settings(dt.S; diffusion=true, batch=12, solver=ISSEM());
 S, L, L_all, G = remake_days_train(dt.p, S, L; days=12, train_frac=1/2);
 
 # optimize and save
-p_opt2 = refine_fit(dt.p,S,L)
+p_opt2 = refine_fit(dt.p,S,L; rate_div=5.0, iter_mult=2.0)
 
 loss_v, _, _, GG, pred = loss(p_opt2,S,L);
 save_data(p_opt2, S, L, GG, L_all, loss_v, pred; file=basefile * ".jld2")
@@ -238,6 +236,13 @@ save_summary_plots.(["circad-3-2_1_t6", "circad-3-2_2_t6", "circad-3-2_3_t6", "c
 # some of the best
 plot_percentiles(["circad-3-2_1_t6", "circad-3-3_5_t6", "circad-4-4_2_t6", "circad-4-4_3_t6", "circad-5-5_3_t6", "circad-6-6_1_t6", "circad-4-4_2_stoch", "circad-4-4_2_stoch_t6_h5", "stoch-3-3_1_t6", "stoch-4-4_2_t6_h5", "stoch-4-4_3_t6"], show_days=[5,10,15])
 
+plt = plot_percentiles(["stoch-4-4_1_w2_34_test", "stoch-4-4_1_w2_w4_t8",
+			"stoch-4-4_1_w2_w6_t12"];
+			data_dir="/Users/steve/Desktop/plots/tmp/", use_duration=false,
+			show_days=[10,20,30]);
+
+plt=plot_w_range(["stoch-4-4_1_w2", "stoch-4-4_1_w2_w4_t8", "stoch-4-4_1_w2_w6_t12"];
+		file_labels=["w2", "w4_t8", "w6_t12"], samples=1000, show_days=[10,20,30])
 
 ################### Approx Bayes, split training and prediction ##################
 

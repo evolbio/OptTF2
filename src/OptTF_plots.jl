@@ -1,8 +1,9 @@
 module OptTF_plots
 using OptTF, Interpolations, Roots, Logging, Distributions, Plots, StatsPlots,
-		StatsPlots.PlotMeasures, DifferentialEquations, DelimitedFiles, Statistics
+		StatsPlots.PlotMeasures, DifferentialEquations, DelimitedFiles, Statistics,
+		Printf
 export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots,
-		plot_tf, plot_percentiles
+		plot_tf, plot_percentiles, plot_w_range
 
 # must have file extension
 file_stem(file) = basename(file[1:findlast(isequal('.'),file)-1])
@@ -32,7 +33,8 @@ function plot_callback(loss_val, S, L, G, pred_all, show_all; no_display=false)
 		end
 	else
 		dim = length(pred_all[:,1])
-		plt = plot(size=(1200,250*(dim ÷ 2)), layout=((dim ÷ 2),2),left_margin=12px)
+		plt = plot(size=(1200,250*(Int(floor(dim / 2)))),
+					layout=((Int(floor(dim / 2))),2),left_margin=12px)
 		for i in 1:dim
 			# proteins [S.n+1:2S.n] on left, mRNA [1:S.n] on right
 			idx = vcat(2:2:dim,1:2:dim) 	# subplot index [2,4,6,...,1,3,5,...]
@@ -181,9 +183,9 @@ remove_nan!(v) = filter!(x -> !isnan(x), v)
 # save_summary_plots("circad-5-5_1_t6"; samples=1000, plot_dir="/Users/steve/Desktop/");
 # save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
 function save_summary_plots(filebase; samples = 100,
-			plot_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/tmp/")
+			plot_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/tmp/",
+			proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/")
 	println("Making plots for $filebase")
-	proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/";
 	dt = Logging.with_logger(Logging.NullLogger()) do
    		load_data(proj_output * filebase * ".jld2");
 	end
@@ -346,7 +348,7 @@ end
 # give single filebase as "basename" or array as ["basename1", "basename2", ...]
 # if array of names, then use plot_percentiles.() for map over names
 # max number of show_days == 3
-function plot_percentiles(filebase;
+function plot_percentiles(filebase; file_labels=nothing,
 				data_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/plots",
 				use_duration=false, show_days=[10,20,30])
 	file_vec = typeof(filebase) == String ? [filebase] : filebase
@@ -383,13 +385,64 @@ function plot_percentiles(filebase;
 			plot!([x,x], [y[4],y[5]], color=:black, linewidth=2)
 			scatter!([x],[y[3]], color=:black)
 		end
-		f = replace(f, "circad" => "C")
-		f = replace(f, "stoch" => "S")
-		f = replace(f, "_t6" => "")
+		if file_labels != nothing && num_files == length(file_labels)
+			f = file_labels[i]
+		else
+			f = replace(f, "circad" => "C")
+			f = replace(f, "stoch" => "S")
+			f = replace(f, "_t6" => "")
+		end
 		annotate!(i * x_incr_files, -9.0, Plots.text(f, 11, rotation=-90, :left))
 	end
 	display(plt)
 	return(plt)
+end
+
+# for each jld2 input, plot range of w=noise_wait values in %-tile plot
+# first use save_summary_plots to generate raw plots and data
+# then summarize with final percentile plot for deviation distns
+# label_base length must match filebase list length, if labels given
+function plot_w_range(filebase; file_labels = nothing, samples=1000,
+			w_val = [2., 4., 8., 16., 1000.],
+			in_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/",
+			out_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/tmp/",
+			use_duration=false, show_days=[10,20,30],
+			display_plot=true)
+	files = typeof(filebase) == String ? [filebase] : filebase
+	@assert typeof(files) == Vector{String}
+	num_files = length(files)
+	file_labels = typeof(file_labels) == String ? [file_labels] : file_labels
+	@assert file_labels == nothing || num_files == length(file_labels) "Check file labels"
+	new_basefiles = Vector{String}(undef,0)
+	new_labels = file_labels == nothing ? nothing : Vector{String}(undef,0)
+	for i in 1:num_files
+		dt = load_data(in_dir * files[i] * ".jld2")
+		ff = generate_tf_activation_f(dt.S.tf_in_num)
+		for w in w_val
+			S = dt.S
+			L = loss_args(dt.L; f=ff, noise_wait=w)
+			loss_v, _, _, GG, pred = loss(dt.p,S,L);
+			S, L, L_all, G = remake_days_train(dt.p, S, L; days=S.days,
+				train_frac=S.train_frac);
+			base_w = files[i] * @sprintf("_w%04d", w)
+			push!(new_basefiles, base_w)
+			if file_labels != nothing
+				push!(new_labels, file_labels[i] * @sprintf("_w%04d", w))
+			end
+			out_jld2 = out_dir * base_w * ".jld2"
+			save_data(dt.p, S, L, GG, L_all, loss_v, pred; file=out_jld2)
+			if !isfile(out_dir * base_w * "_dev_cdf.pdf")
+				save_summary_plots(base_w; samples=samples,
+					plot_dir=out_dir, proj_output=out_dir);
+			end
+			rm(out_jld2)
+		end
+	end
+	
+	plt = plot_percentiles(new_basefiles; file_labels=new_labels,
+				data_dir=out_dir, use_duration=use_duration, show_days=show_days)
+	if display_plot display(plt) end
+	return plt
 end
 
 end	# module
