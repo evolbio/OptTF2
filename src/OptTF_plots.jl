@@ -3,7 +3,7 @@ using OptTF, Interpolations, Roots, Logging, Distributions, Plots, StatsPlots,
 		StatsPlots.PlotMeasures, DifferentialEquations, DelimitedFiles, Statistics,
 		Printf
 export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots,
-		plot_tf, plot_percentiles, plot_w_range
+		plot_tf, plot_percentiles, plot_w_range, plot_tf_4_onepage
 
 # must have file extension
 file_stem(file) = basename(file[1:findlast(isequal('.'),file)-1])
@@ -73,7 +73,7 @@ function plot_callback(loss_val, S, L, G, pred_all, show_all; no_display=false)
 end
 
 function plot_stoch(p, S, L, G, L_all; samples=5, show_orig=false, display_plot=true)
-	plt = plot(size=(1600,400))
+	plt = plot(size=(1600,400), bottom_margin=5px)
 	all_steps = L_all.tsteps
 	ts = all_steps
 	wp = 1.5
@@ -342,11 +342,51 @@ function plot_tf(file; save_dir="",
 	return(plt)
 end
 
+# file is jld2 file without path
+# plot of only one protein (p_focal) for all four inputs
+function plot_tf_4_onepage(file; display_plot=true, p_focal = 1,
+			proj_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/")
+	if typeof(findlast(isequal('.'),file)) == Nothing
+		file = file * ".jld2"	# add ext if not present, must be .jld2
+	end
+	dt = Logging.with_logger(Logging.NullLogger()) do
+		load_data(proj_dir * file)
+	end
+	S = dt.S
+	@assert S.n == 4 "Can plot only for S.n == 4"
+	f = generate_tf_activation_f(S.tf_in_num)
+	p = S.opt_dummy_u0 ? dt.p[2S.n+1:end] : dt.p
+	pp = OptTF.OptTF_param.linear_sigmoid.(p, S.d, S.k1, S.k2)
+	pp .= (pp .* S.p_mult) .+ S.p_min
+	b = 10.0
+	d = 0:5
+	d_num = length(d)
+	incr = 0.025
+	xx = 0:incr:5
+	yy = 0:incr:5
+	plt = plot(size=(d_num*290,d_num*300),layout=(d_num,d_num), grid=false)
+	for i in d				# rows, p3
+		for j in d			# cols, p4
+			zz = [OptTF.calc_f(f,pp,[b^x,b^y,10^i,10^j],S)[p_focal] for x in xx, y in yy]
+			surface!(xx, yy, zz, zrange=(0,1), subplot = j + 1 + i*d_num,
+						colorbar=false,
+						xlabel=(i==5) ? "p1" : "", ylabel=(i==5) ? "p2" : "",
+						zlabel=(j==0) ? "p3=$i" : "",
+						title=(i==0) ? "p4=$j" : "", seriescolor=:PuOr_9)
+						# BrBG_6 PRGn_9
+						# see https://docs.juliaplots.org/latest/generated/colorschemes/
+		end
+	end
+
+	if display_plot display(plt) end
+	return plt	
+end
+
 # plot 5, 25, 50, 75, 95 %iles from delimited data saved in save_summary_plots
 # give single filebase as "basename" or array as ["basename1", "basename2", ...]
 # if array of names, then use plot_percentiles.() for map over names
 # max number of show_days == 3
-function plot_percentiles(filebase; file_labels=nothing,
+function plot_percentiles(filebase; file_labels=nothing, ylim=(-8,8), bottom_trim=0px,
 				data_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/plots",
 				use_duration=false, show_days=[10,20,30])
 	file_vec = typeof(filebase) == String ? [filebase] : filebase
@@ -364,8 +404,9 @@ function plot_percentiles(filebase; file_labels=nothing,
 	else
 		@assert false "Should not be here"
 	end
-	plt = plot(size=(num_files*100,550),xlim=(0,1),ylim=(-8,8),legend=false,
-				grid=true, showaxis=:y, xticks=false, bottom_margin=150px)
+	plt = plot(size=(num_files*100,550),xlim=(0,1),ylim=ylim,legend=false,
+				grid=true, showaxis=:y, xticks=false, bottom_margin=150px-bottom_trim,
+				ylabel = "Deviation (hours)")
 	for i in 1:num_files
 		f = file_vec[i]
 		file_start = data_dir * "/" * f
@@ -390,7 +431,8 @@ function plot_percentiles(filebase; file_labels=nothing,
 			f = replace(f, "stoch" => "S")
 			f = replace(f, "_t6" => "")
 		end
-		annotate!(i * x_incr_files, -9.0, Plots.text(f, 11, rotation=-90, :left))
+		if f[1] == '_' f = replace(f, "_" => "") end
+		annotate!(i * x_incr_files, 1.05*ylim[1], Plots.text(f, 11, rotation=-90, :left))
 	end
 	display(plt)
 	return(plt)
@@ -401,10 +443,10 @@ end
 # then summarize with final percentile plot for deviation distns
 # label_base length must match filebase list length, if labels given
 function plot_w_range(filebase; file_labels = nothing, samples=1000,
-			w_val = [2., 4., 8., 16., 1000.],
+			w_val = [2., 4., 8., 16., 1000.], ylim=(-8,8),
 			in_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/",
 			out_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/tmp/",
-			use_duration=false, show_days=[10,20,30],
+			use_duration=false, show_days=[10,20,30], bottom_trim=0px,
 			display_plot=true)
 	files = typeof(filebase) == String ? [filebase] : filebase
 	@assert typeof(files) == Vector{String}
@@ -416,9 +458,10 @@ function plot_w_range(filebase; file_labels = nothing, samples=1000,
 	for i in 1:num_files
 		dt = load_data(in_dir * files[i] * ".jld2")
 		ff = generate_tf_activation_f(dt.S.tf_in_num)
+		predict = OptTF.setup_diffeq_func(dt.S);
 		for w in w_val
 			S = dt.S
-			L = loss_args(dt.L; f=ff, noise_wait=w)
+			L = loss_args(dt.L; f=ff, noise_wait=w, predict=predict)
 			loss_v, _, _, GG, pred = loss(dt.p,S,L);
 			S, L, L_all, G = remake_days_train(dt.p, S, L; days=S.days,
 				train_frac=S.train_frac);
@@ -437,8 +480,9 @@ function plot_w_range(filebase; file_labels = nothing, samples=1000,
 		end
 	end
 	
-	plt = plot_percentiles(new_basefiles; file_labels=new_labels,
-				data_dir=out_dir, use_duration=use_duration, show_days=show_days)
+	plt = plot_percentiles(new_basefiles; file_labels=new_labels, ylim=ylim,
+				data_dir=out_dir, use_duration=use_duration, show_days=show_days,
+				bottom_trim=bottom_trim)
 	if display_plot display(plt) end
 	return plt
 end

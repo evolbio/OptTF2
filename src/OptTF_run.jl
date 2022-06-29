@@ -122,7 +122,7 @@ S = Settings(dt.S; diffusion=true, batch=12, solver=ISSEM());
 S, L, L_all, G = remake_days_train(dt.p, S, L; days=12, train_frac=1/2);
 
 # optimize and save
-p_opt2 = refine_fit(dt.p,S,L; rate_div=5.0, iter_mult=2.0)
+p_opt2 = refine_fit(dt.p,S,L; rate_div=2.0, iter_mult=1.0)
 
 loss_v, _, _, GG, pred = loss(p_opt2,S,L);
 save_data(p_opt2, S, L, GG, L_all, loss_v, pred; file=basefile * ".jld2")
@@ -243,6 +243,13 @@ plt = plot_percentiles(["stoch-4-4_1_w2_34_test", "stoch-4-4_1_w2_w4_t8",
 
 plt=plot_w_range(["stoch-4-4_1_w2", "stoch-4-4_1_w2_w4_t8", "stoch-4-4_1_w2_w6_t12"];
 		file_labels=["w2", "w4_t8", "w6_t12"], samples=1000, show_days=[10,20,30])
+
+using StatsPlots.PlotMeasures
+
+plt=plot_w_range(["stoch-4-4_1_w2"]; file_labels=[""], samples=1000,
+                       ylim=(-4.4,4.4), show_days=[10,20,30], bottom_trim=70px)
+
+plt=plot_tf_4_onepage("stoch-4-4_1_w2", p_focal=1)
 
 ################### Approx Bayes, split training and prediction ##################
 
