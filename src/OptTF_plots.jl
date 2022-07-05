@@ -388,7 +388,8 @@ end
 # max number of show_days == 3
 function plot_percentiles(filebase; file_labels=nothing, ylim=(-8,8), bottom_trim=0px,
 				data_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/plots",
-				use_duration=false, show_days=[10,20,30])
+				use_duration=false, show_days=[10,20,30],
+				height=550)
 	file_vec = typeof(filebase) == String ? [filebase] : filebase
 	@assert typeof(file_vec) == Vector{String}
 	num_files = length(file_vec)
@@ -404,7 +405,7 @@ function plot_percentiles(filebase; file_labels=nothing, ylim=(-8,8), bottom_tri
 	else
 		@assert false "Should not be here"
 	end
-	plt = plot(size=(num_files*100,550),xlim=(0,1),ylim=ylim,legend=false,
+	plt = plot(size=(num_files*100,height),xlim=(0,1),ylim=ylim,legend=false,
 				grid=true, showaxis=:y, xticks=false, bottom_margin=150px-bottom_trim,
 				ylabel = "Deviation (hours)")
 	for i in 1:num_files
@@ -447,7 +448,7 @@ function plot_w_range(filebase; file_labels = nothing, samples=1000,
 			in_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/",
 			out_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/tmp/",
 			use_duration=false, show_days=[10,20,30], bottom_trim=0px,
-			display_plot=true)
+			display_plot=true, height=550)
 	files = typeof(filebase) == String ? [filebase] : filebase
 	@assert typeof(files) == Vector{String}
 	num_files = length(files)
@@ -482,7 +483,7 @@ function plot_w_range(filebase; file_labels = nothing, samples=1000,
 	
 	plt = plot_percentiles(new_basefiles; file_labels=new_labels, ylim=ylim,
 				data_dir=out_dir, use_duration=use_duration, show_days=show_days,
-				bottom_trim=bottom_trim)
+				bottom_trim=bottom_trim, height=height)
 	if display_plot display(plt) end
 	return plt
 end
