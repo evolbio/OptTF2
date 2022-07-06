@@ -23,8 +23,8 @@ default_ode() = Settings(
 	max_it		= 200,
 	opt_dummy_u0= true,
 	jump 		= false,
-	diffusion	= true,
-	batch 		= 12
+	diffusion	= false,
+	batch 		= 1
 )
 
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
