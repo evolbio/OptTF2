@@ -12,8 +12,6 @@ by Steven A. Frank, https://stevefrank.org
 
 Only on Zenodo at https://doi.org/10.5281/zenodo.6798421, the directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript plus many other sample runs. Zenodo also includes the GitHub code tagged as version zenodo_1.0. 
 
-Directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript plus many other sample runs are only available on Zenodo at https://doi.org/10.5281/zenodo.6798421, which also includes the GitHub code tagged as version zenodo_1.0. 
-
 [GitHub](https://github.com/evolbio/OptTF) has the source code along with this file but without the output/ and analysis/ directories. Small updates will be posted on GitHub without updating the Zenodo version. In other words, GitHub is the best place for the source code, and Zenodo is the best place for the extra files in the output/ and analysis/ directories.
 
 # Getting started with the code
