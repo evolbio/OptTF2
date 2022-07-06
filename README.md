@@ -2,7 +2,7 @@
 
 Source code for manuscript:
 
-​	*Optimization of transcription factor genetic circuits*
+Frank, S. A. 2022. Optimization of transcription factor genetic circuits. bioRxiv 2022.07.05.498863, [doi:10.1101/2022.07.05.498863](https://doi.org/10.1101/2022.07.05.498863).
 
 by Steven A. Frank, https://stevefrank.org
 
@@ -10,15 +10,9 @@ by Steven A. Frank, https://stevefrank.org
 
 ---
 
-A preprint illustrating what can be done with this code is at:
+Only on Zenodo at https://doi.org/10.5281/zenodo.6798421, the directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript plus many other sample runs. Zenodo also includes the GitHub code tagged as version zenodo_1.0. 
 
-​	Preprint URL to appear here
-
-​	**Updates to this file with a guide to the source code coming soon, check back**
-
----
-
-Directories output/ and analysis/ with all parameters, output data, and plots for runs used in the manuscript plus many other sample runs are only available on Zenodo at https://doi.org/10.5281/zenodo.6798421 [link not yet active, will be activated soon], which also includes the GitHub code tagged as version zenodo_1.0. 
+Directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript plus many other sample runs are only available on Zenodo at https://doi.org/10.5281/zenodo.6798421, which also includes the GitHub code tagged as version zenodo_1.0. 
 
 [GitHub](https://github.com/evolbio/OptTF) has the source code along with this file but without the output/ and analysis/ directories. Small updates will be posted on GitHub without updating the Zenodo version. In other words, GitHub is the best place for the source code, and Zenodo is the best place for the extra files in the output/ and analysis/ directories.
 
@@ -48,20 +42,20 @@ In the file src/OptTF_settings.jl, near the top, make sure the function default_
 
 ```julia
 default_ode() = Settings(
-	allow_self 	= true,
-	gr_type 		= 1,
-	n						= 4,
-	tf_in_num		= 4,
-	rtol				= 1e-4,
-	atol				= 1e-6,
-	adm_learn		= 0.002,
-	days				= 6.0,
-	train_frac	= 2/3,
-	max_it			= 200,
-	opt_dummy_u0= true,
-	jump 				= false,
-	diffusion		= false,
-	batch 			= 1
+	allow_self = true,
+	gr_type = 1,
+	n = 4,
+	tf_in_num = 4,
+	rtol = 1e-4,
+	atol = 1e-6,
+	adm_learn = 0.002,
+	days = 6.0,
+	train_frac = 2/3,
+	max_it = 200,
+	opt_dummy_u0 = true,
+	jump = false,
+	diffusion = false,
+	batch = 1
 )
 ```
 
@@ -108,20 +102,20 @@ The real power of the optimization in this code comes from its ability to optimi
 
 ```julia
 default_ode() = Settings(
-	allow_self 	= true,
-	gr_type 		= 1,
-	n						= 4,
-	tf_in_num		= 4,
-	rtol				= 1e-4,
-	atol				= 1e-6,
-	adm_learn		= 0.002,
-	days				= 6.0,
-	train_frac	= 2/3,
-	max_it			= 200,
-	opt_dummy_u0= true,
-	jump 				= false,
-	diffusion		= true,
-	batch 			= 12
+	allow_self = true,
+	gr_type = 1,
+	n = 4,
+	tf_in_num = 4,
+	rtol = 1e-4,
+	atol = 1e-6,
+	adm_learn = 0.002,
+	days = 6.0,
+	train_frac = 2/3,
+	max_it = 200,
+	opt_dummy_u0 = true,
+	jump = false,
+	diffusion = true,
+	batch = 12
 )
 ```
 
@@ -133,9 +127,31 @@ For additional things to explore, look at src/OptTF_run.jl.
 
 # Sample output and graphics
 
-To start, get the output and analysis directories from Zenodo at the [link above](#OptTF: Overview)
+To start, get the output and analysis directories from Zenodo at the [link above](#OptTF: Overview). The directory analysis/plots_publish/ contains detailed graphics related to the case study presented in the manuscript. All file names have a base part that describes the run. For example, for the file stoch-4-4_1_w2_w0002_dev_cdf.pdf, the base part is stoch-4-4_1_w2, which means that the run was stochastic and had an average waiting time of w=2 between random switching of the external light entrainment signal. This run was the example used in the manuscript. The part of the name w0002_dev_cdf describes the particular plot for that run, in this case, with w=2 during the collection of data for the plots, and measuring the cdf of the deviation in entry time into the daylight period.
+
+Other files have names such as stoch-4-4_1_w2_w4_t8_w0002_dev_cdf.pdf. Here, the base is stoch-4-4_1_w2_w4_t8, which means that the original stoch-4-4_1_w2 was further optimized under conditions of w=4 and over a period of 8 days. Such further optimizations always reduced the performance of the original run. The reason for that remains an interesting puzzle, for which the solution may provide some insight into the optimization surface and other key aspects of the TF design.
 
 ## Loading a prior run for plotting and further analysis
 
-Add note about finding the git version for a prior run, resetting Julia to match
+For the runs in the output/ directory with extension .jld2, you can load the information, which includes all of the settings from the file src/OptTF_settings.jl, the optimized parameters, and some further information needed for additional analysis.
+
+Following the steps in src/OptTF_run.jl, in the section *Load results and complete optimization*, we can analyze a prior run. For example, to load the data from the run analyzed as the test case in the manuscript, start with
+
+```julia
+using OptTF, DifferentialEquations
+proj_dir = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
+basefile = proj_dir * "output/stoch-4-4_1_w2";
+dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
+S = dt.S;
+ff = generate_tf_activation_f(dt.S.tf_in_num);
+L = loss_args(dt.L; f=ff);
+```
+
+Use an appropriate string for your proj_dir. The variable S contains the many settings that set up the run. For example, S.git_vers will return the git version of the code used for the run. That might be useful if you run into problems because the current code version differs from the version used for a stored run in output/. You could roll the code back to the git version that matched the run, or maybe one past that version in case the run was done before saving the most recent code changes in git. Many other settings are of interest. For example, S.batch will return the batch size for each loss calculation, in this case, 12.
+
+Various combinations of the additional commands in the src/OptTF_run.jl code for this section provide ways to look at the loaded run.
+
+## Detailed plots
+
+Many detailed plots can be made with the code in src/OptTF_run.jl, in the section *Stochastic runs evaluation*. You can modify the examples shown. You will probably need to have a quick look at the functions in src/OptTF_plots.jl to call those functions correctly, get the file system directories right, find the output, etc. 
 

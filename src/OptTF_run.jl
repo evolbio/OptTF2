@@ -97,10 +97,11 @@ plot_percentiles([basef * "_test_w1000"]; data_dir="/Users/steve/Desktop/plots/t
 				use_duration=false, show_days=[10,20,30])
 
 ###################################################################
-# Load results and complete optimizationusing OptTF, DifferentialEquations
+# Load results and complete optimization using OptTF, DifferentialEquations
 
-proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
-basefile = proj_output * "output/stoch-4-4_1_w2";
+using OptTF, DifferentialEquations
+proj_dir = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
+basefile = proj_dir * "output/stoch-4-4_1_w2";
 dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
 S = dt.S;
 ff = generate_tf_activation_f(dt.S.tf_in_num);
