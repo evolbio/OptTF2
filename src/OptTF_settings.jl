@@ -2,7 +2,7 @@ module OptTF_settings
 include("OptTF_data.jl")
 using .OptTF_data
 using Parameters, DifferentialEquations, Dates, Random, StatsBase
-export Settings, default_ode, reset_rseed, recalc_settings
+export Settings, default_ode, reset_rseed
 
 # One can initialize and then modify settings as follows
 # S = Settings(S; layer_size=50, activate=3, [ADD OTHER OPTIONS AS NEEDED])
@@ -11,6 +11,7 @@ export Settings, default_ode, reset_rseed, recalc_settings
 # See docs for Parameters.jl package
 
 default_ode() = Settings(
+	use_node	= false,
 	allow_self 	= true,
 	gr_type 	= 1,
 	n			= 4,
@@ -37,6 +38,9 @@ function set_rand_seed(gen_seed, preset_seed)
 end
 
 @with_kw struct Settings
+
+# use NODE for TF network input-output
+use_node = false
 
 # function to generate or load data for fitting
 f_data = generate_circadian
@@ -137,9 +141,9 @@ d = 1e-2
 k1 = d*(1.0+exp(-10.0*d))
 k2 = 10.0*(1.0-d) + log(d/(1.0-d))
 ddim = opt_dummy_u0 ? 2*n : 0
-num_param = ddim+4n+2*n*s+n*N+n*(N - (s+1))
-p_min = calc_pmin(n,s,num_param,ddim,m_low_rate,p_low_rate,k_min)
-p_mult = calc_pmult(n,s,N,p_max)
+num_param = use_node ? ddim+4n : ddim+4n + 2*n*s+n*N+n*(N - (s+1))
+p_min = calc_pmin(n,s,num_param,ddim,m_low_rate,p_low_rate,k_min,use_node)
+p_mult = calc_pmult(n,s,N,p_max,use_node)
 bk = 4n
 bh = bk+n*s
 ba = bh+n*s
@@ -201,44 +205,21 @@ solver = diffusion ? ISSEM() : Tsit5()	# Rodas4P() or Tsit5()
 
 end # struct
 
-function calc_pmin(n,s,pnum,ddim,m_low_rate,p_low_rate,k_min)
+function calc_pmin(n,s,pnum,ddim,m_low_rate,p_low_rate,k_min,use_node)
 	p_min = zeros(pnum-ddim)
 	p_min[1:2n] .= m_low_rate .* ones(2n)
 	p_min[2n+1:4n] .= p_low_rate .* ones(2n)
-	p_min[4n+1:4n+n*s] .= k_min .* ones(n*s)
+	if !use_node p_min[4n+1:4n+n*s] .= k_min .* ones(n*s) end
 	p_min
 end
 
-function calc_pmult(n,s,N,p_max)::Vector{Float64}
-	p_dim = [2n,2n,n*s,n*s,n*N,n*(N-(s+1))]
+function calc_pmult(n,s,N,p_max,use_node)::Vector{Float64}
+	p_dim = use_node ? [2n,2n] : [2n,2n,n*s,n*s,n*N,n*(N-(s+1))]
 	p_mult = []
 	for i in 1:length(p_dim)
 		append!(p_mult, p_max[i] .* ones(p_dim[i]))
 	end
 	p_mult
-end
-
-# fix calculated settings, in case one setting changes must propagate to others
-function recalc_settings(S)
-	@assert false "Recalc does not include ode_parse_p components and other components,\
-		\n\treset by modifying default_ode"
-	tf_in = 
-  	if S.gr_type == 2
-	  circshift([[i] for i in 1:S.n],1)		# cycle_digraph, as in repressilator
-  	elseif S.allow_self
-	  [sort(sample(1:S.n, S.tf_in_num, replace=false)) for i in 1:S.n] # digraph w/tf_in_num in degree
-  	else
-	  [sort(sample(1:S.n, S.tf_in_num, replace=false)) for i in 1:S.n] # digraph w/tf_in_num in degree
-  	end
-	
-	S = Settings(S; start_time = Dates.format(now(),"yyyymmdd_HHMMSS"),
-			git_vers = chomp(read(`git -C $(S.proj_dir) rev-parse --short HEAD`,String)),
-			actual_seed = set_rand_seed(S.generate_rand_seed, S.preset_seed),
-			wt_steps = Int(ceil(log(500)/log(S.wt_base))))
-	S = Settings(S; tf_in=tf_in)
-	S = Settings(S; out_file = "/Users/steve/Desktop/" * S.start_time * ".jld2")
-	
-	return S
 end
 
 end	# module

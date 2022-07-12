@@ -26,7 +26,7 @@ function ode_parse_p(p,S)
 	# transform parameter values for gradients into values used for ode
 	# min val for rates is S.d=1e-2, 0 for all others, max values vary, see p_max
 	# see linear_sigmoid() for transform of gradient params to ode params
-	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] with linear_sigmoid pattern
+	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] w/ linear_sigmoid
 	# set min on rates m_a, m_d, p_a, p_d, causes top to be p_max + p_min
 	ppp = (pp .* S.p_mult) .+ S.p_min
 	m_a = @view ppp[1:n]			# n
@@ -34,18 +34,22 @@ function ode_parse_p(p,S)
 	p_a = @view ppp[2n+1:3n]		# n
 	p_d = @view ppp[3n+1:4n]		# n
 	
-	k = [@view ppp[S.bk+1+(i-1)*s:S.bk+i*s] for i in 1:n]		# ns
-	h = [@view ppp[S.bh+1+(i-1)*s:S.bh+i*s] for i in 1:n]		# ns
-	a = [@view ppp[S.ba+1+(i-1)*N:S.ba+i*N] for i in 1:n]		# nN, [0,1] for TF activation
-	r = [@view ppp[S.br+1+(i-1)*S.ri:S.br+i*S.ri] for i in 1:n]	# n(N-(s+1))
+	if !S.use_node
+		k = [@view ppp[S.bk+1+(i-1)*s:S.bk+i*s] for i in 1:n]	# ns
+		h = [@view ppp[S.bh+1+(i-1)*s:S.bh+i*s] for i in 1:n]	# ns
+		a = [@view ppp[S.ba+1+(i-1)*N:S.ba+i*N] for i in 1:n]	# nN, [0,1] for TF activation
+		r = [@view ppp[S.br+1+(i-1)*S.ri:S.br+i*S.ri] for i in 1:n]	# n(N-(s+1))
 	
-	# preallocating is faster but fails with AutoDiff. For example
-	# k = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, true}}(undef,n)
-	# for i in 1:n  k[i] = @view ppp[S.bk+1+(i-1)*s:S.bk+i*s]  end
+		# preallocating is faster but fails with AutoDiff. For example
+		# k = Vector{SubArray{Float64, 1, Vector{Float64}, Tuple{UnitRange{Int64}}, 
+		#	true}}(undef,n)
+		# for i in 1:n  k[i] = @view ppp[S.bk+1+(i-1)*s:S.bk+i*s]  end
 
-	@assert length(ppp) == S.br + n*S.ri
-	# return a named tuple
-	(;m_a, m_d, p_a, p_d, k, h, a, r)			# return named tuple
+		@assert length(ppp) == S.br + n*S.ri
+		return (;m_a, m_d, p_a, p_d, k, h, a, r)		# return named tuple
+	else
+		return (;m_a, m_d, p_a, p_d)					# return named tuple
+	end
 end
 
 test_range(x,top,offset) = @assert minimum(x) >= offset && maximum(x) <= top+offset
@@ -59,10 +63,12 @@ function test_param(p,S)
 	test_range(P.m_d,S.m_rate,S.m_low_rate)
 	test_range(P.p_a,S.p_rate,S.p_low_rate)
 	test_range(P.p_d,S.p_rate,S.p_low_rate)
-	test_range(minimum(P.k),maximum(P.k),S.k,S.k_min)	# need min of min for array of arrays
-	test_range(minimum(P.h),maximum(P.h),S.h,no_offset)
-	test_range(minimum(P.a),maximum(P.a),S.a,no_offset)
-	if S.tf_in_num > 1 test_range(minimum(P.r),maximum(P.r),S.r,no_offset) end
+	if !S.use_node
+		test_range(minimum(P.k),maximum(P.k),S.k,S.k_min)	# min of min for array of arrays
+		test_range(minimum(P.h),maximum(P.h),S.h,no_offset)
+		test_range(minimum(P.a),maximum(P.a),S.a,no_offset)
+		if S.tf_in_num > 1 test_range(minimum(P.r),maximum(P.r),S.r,no_offset) end
+	end
 end
 
 # precalculate and pass k1 = d(1+exp(-10d)) and k2 = 10(max-d) + log(d/(max-d))
@@ -132,26 +138,28 @@ function init_ode_param(u0,S; noise=1e-1)
 	p[ddim+2n+1:ddim+4n] .= [inverse_lin_sigmoid(p[i]/S.p_rate,d,k1,k2)
 									for i in ddim+2n+1:ddim+4n]
 	
-	b = ddim+4n
-	# ode_parse adds S.k_min, so subtract here
-	p[b+1:b+n*s] .= 5e2 .* ones(n*s) .- (S.k_min .* ones(n*s))			# k
-	p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/S.k,d,k1,k2) for i in b+1:b+n*s]
+	if !S.use_node
+		b = ddim+4n
+		# ode_parse adds S.k_min, so subtract here
+		p[b+1:b+n*s] .= 5e2 .* ones(n*s) .- (S.k_min .* ones(n*s))			# k
+		p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/S.k,d,k1,k2) for i in b+1:b+n*s]
 	
-	b = ddim+4n+n*s
-	p[b+1:b+n*s] .= 2.0 .* ones(n*s)			# h
-	p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/S.h,d,k1,k2) for i in b+1:b+n*s]
+		b = ddim+4n+n*s
+		p[b+1:b+n*s] .= 2.0 .* ones(n*s)			# h
+		p[b+1:b+n*s] .= [inverse_lin_sigmoid(p[i]/S.h,d,k1,k2) for i in b+1:b+n*s]
 	
-	b = ddim+4n+2n*s
-	# p[b+1:b+n*N] .= 0.5 .* ones(n*N)			# a
-	p[b+1:b+n*N] .= rand(n*N)					# use rand to provide more initial variation
-	p[b+1:b+n*N] .= [inverse_lin_sigmoid(p[i]/S.a,d,k1,k2) for i in b+1:b+n*N]
+		b = ddim+4n+2n*s
+		# p[b+1:b+n*N] .= 0.5 .* ones(n*N)			# a
+		p[b+1:b+n*N] .= rand(n*N)					# use rand for more initial variation
+		p[b+1:b+n*N] .= [inverse_lin_sigmoid(p[i]/S.a,d,k1,k2) for i in b+1:b+n*N]
 	
-	b = ddim+4n+2*n*s+n*N
-	n_r = n*(N-(s+1))
-	p[b+1:b+n_r] .= ones(n_r)					# r
-	p[b+1:b+n_r] .= [inverse_lin_sigmoid(p[i]/S.r,d,k1,k2) for i in b+1:b+n_r]
+		b = ddim+4n+2*n*s+n*N
+		n_r = n*(N-(s+1))
+		p[b+1:b+n_r] .= ones(n_r)					# r
+		p[b+1:b+n_r] .= [inverse_lin_sigmoid(p[i]/S.r,d,k1,k2) for i in b+1:b+n_r]
 	
-	@assert (b+n_r) == num_p
+		@assert (b+n_r) == num_p
+	end
 	# Add small amount of noise, note that will be transformed by sigmoid, so nonlinear
 	p .= p .* (1.0 .+ noise.*randn(num_p))
 	return p

@@ -1,7 +1,9 @@
 module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Printf, DifferentialEquations,
-	Distributed, Optimization, OptimizationFlux, OptimizationOptimJL, ForwardDiff, 	
-	Statistics, Plots, Distributions
+	Distributed, Optimization, OptimizationOptimJL, ForwardDiff, 	
+	Statistics, Plots, Distributions, Optimisers, Random, NNlib, Suppressor,
+	OptimizationFlux
+@suppress begin using Lux end	# suppress warning: rrule overwritten Flux vs Lux
 include("OptTF_settings.jl")
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
@@ -13,7 +15,7 @@ using .OptTF_data
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
 			refine_fit_bfgs, refine_fit, setup_refine_fit, loss, save_data, 
 			load_data, remake_days_train, loss_args, callback, mma, hill
-export Settings, default_ode, reset_rseed, recalc_settings	# from OptTF_settings
+export Settings, default_ode, reset_rseed					# from OptTF_settings
 export generate_circadian, circadian_val					# from OptTF_data
 export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots,
 			plot_tf, plot_percentiles, plot_w_range, plot_tf_4_onepage
@@ -141,6 +143,28 @@ function ode!(du, u, p, t, S, f, G)
 
 	f_val = calc_f(f,pp,u_p,S)
 
+	du[1:n] = m_a .* f_val .- m_d .* u_m		# mRNA level
+	du[n+1:2n] = p_a .* u_m .- p_d .* u_p		# protein level
+	light = G.circadian_val(G,t)				# noisy circadian input
+	# fast extra production rate by post-translation modification or allostery
+	du[n+2] += S.light_prod_rate * intensity(light)
+end
+
+function node!(du, u, p, t, S, tf, re, state, G)
+	n = S.n
+	u_m = @view u[1:n]			# mRNA
+	u_p = @view u[n+1:2n]		# protein
+	
+	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] w/linear_sigmoid 
+	# set min on rates m_a, m_d, p_a, p_d, causes top to be p_max + p_min
+	pp .= (pp .* S.p_mult) .+ S.p_min
+
+	m_a = @view pp[1:n]
+	m_d = @view pp[n+1:2n]
+	p_a = @view pp[2n+1:3n]
+	p_d = @view pp[3n+1:4n]
+	
+	f_val = tf(u_p,re(pp[4n+1:end]),state)
 	du[1:n] = m_a .* f_val .- m_d .* u_m		# mRNA level
 	du[n+1:2n] = p_a .* u_m .- p_d .* u_p		# protein level
 	light = G.circadian_val(G,t)				# noisy circadian input
@@ -334,6 +358,13 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	G = S.f_data(S; init_on=init_on, rand_offset=offset, noise_wait=noise_wait);
 	predict = setup_diffeq_func(S);
 	
+	# for NODE
+	if S.use_node
+		tf_net = Chain(Dense(S.n => 10*S.n, tanh), Dense(10*S.n => S.n, sigmoid))
+		ps, _ = Lux.setup(Random.default_rng(), tf_net)
+		p_node, re_node = destructure(ps)
+	end
+
 	# If using subset of data for training then keep original and truncate tsteps
 	tsteps = tsteps_all = G.tsteps
 	tspan = tspan_all = G.tspan
