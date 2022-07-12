@@ -11,7 +11,7 @@ export Settings, default_ode, reset_rseed
 # See docs for Parameters.jl package
 
 default_ode() = Settings(
-	use_node	= false,
+	use_node	= true,
 	allow_self 	= true,
 	gr_type 	= 1,
 	n			= 4,

@@ -1,9 +1,8 @@
 module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Printf, DifferentialEquations,
 	Distributed, Optimization, OptimizationOptimJL, ForwardDiff, 	
-	Statistics, Plots, Distributions, Optimisers, Random, NNlib, Suppressor,
-	OptimizationFlux
-@suppress begin using Lux end	# suppress warning: rrule overwritten Flux vs Lux
+	Statistics, Plots, Distributions, Optimisers, Random, NNlib,
+	OptimizationOptimisers, Lux, DiffEqSensitivity
 include("OptTF_settings.jl")
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
@@ -49,6 +48,9 @@ load_data_warning = true
 	init_on				# boolean, light signal initially on or off
 	rand_offset			# boolean, offset day/night input signal
 	noise_wait			# ave waiting time to random on/off switch for day/night input
+	tf					# function for NODE
+	re					# function to reconstruct parameters for NODE
+	state				# state setup for NODE parameters
 end
 
 # When fit only to training data subset, then need full time period info
@@ -154,20 +156,24 @@ function node!(du, u, p, t, S, tf, re, state, G)
 	n = S.n
 	u_m = @view u[1:n]			# mRNA
 	u_p = @view u[n+1:2n]		# protein
+	p_rates = @view p[1:4n]
+	p_nn = @view p[4n+1:end]
 	
-	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] w/linear_sigmoid 
+	# first 4n parameters are rates
+	pp = linear_sigmoid.(p_rates, S.d, S.k1, S.k2)	# normalizes on [0,1] w/linear_sigmoid 
 	# set min on rates m_a, m_d, p_a, p_d, causes top to be p_max + p_min
-	pp .= (pp .* S.p_mult) .+ S.p_min
+	ppp = (pp .* S.p_mult) .+ S.p_min
 
-	m_a = @view pp[1:n]
-	m_d = @view pp[n+1:2n]
-	p_a = @view pp[2n+1:3n]
-	p_d = @view pp[3n+1:4n]
+	m_a = @view ppp[1:n]
+	m_d = @view ppp[n+1:2n]
+	p_a = @view ppp[2n+1:3n]
+	p_d = @view ppp[3n+1:4n]
 	
-	f_val = tf(u_p,re(pp[4n+1:end]),state)
+	# remainder of p is for NN
+	f_val = tf(u_p,re(p_nn),state)[1]
 	du[1:n] = m_a .* f_val .- m_d .* u_m		# mRNA level
 	du[n+1:2n] = p_a .* u_m .- p_d .* u_p		# protein level
-	light = G.circadian_val(G,t)				# noisy circadian input
+	light = G.circadian_val(G,t)			# noisy circadian input
 	# fast extra production rate by post-translation modification or allostery
 	du[n+2] += S.light_prod_rate * intensity(light)
 end
@@ -296,17 +302,19 @@ end
 
 function loss(p, S, L)
 	G = S.f_data(S; init_on=L.init_on, rand_offset=L.rand_offset, noise_wait=L.noise_wait)
-	ode_c! = (du, u, p, t) -> ode!(du, u, p, t, S, L.f, G)
+	diffeq! = S.use_node ?
+				(du, u, p, t) -> node!(du, u, p, t, S, L.tf, L.re, L.state, G) :
+				(du, u, p, t) -> ode!(du, u, p, t, S, L.f, G)
 	# for SDE, cannot remake problem, so restate it
 	# if using diffusion or noise, must call solve only via loss()
 	# consider callback=cb_zero to handle issues with negative values
 	if S.diffusion
-		prob = SDEProblem(ode_c!, ode_noise!, L.u0, L.prob.tspan, p,
+		prob = SDEProblem(diffeq!, ode_noise!, L.u0, L.prob.tspan, p,
 						reltol = S.rtol, abstol = S.atol,
 						callback=nothing, saveat = values(L.prob.kwargs).saveat,
 						maxiters=1e6)
 	else
-		prob = remake(L.prob, f=ode_c!)
+		prob = remake(L.prob, f=diffeq!)
 	end
 	pred_all = L.predict(p, prob)
 
@@ -339,7 +347,7 @@ end
 # Note: my "p" is documentation's "u" and vice versa
 opt_func(S,L) = OptimizationFunction(
 			(p,u) -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
-			Optimization.AutoForwardDiff())
+			S.use_node ? Optimization.AutoZygote() : Optimization.AutoForwardDiff())
 opt_prob(p,S,L) = OptimizationProblem(opt_func(S,L), p, L.u0)
 
 # new_rseed true uses new seed, false reuses preset_seed
@@ -360,9 +368,11 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	
 	# for NODE
 	if S.use_node
-		tf_net = Chain(Dense(S.n => 10*S.n, tanh), Dense(10*S.n => S.n, sigmoid))
-		ps, _ = Lux.setup(Random.default_rng(), tf_net)
-		p_node, re_node = destructure(ps)
+		tf = Chain(Dense(S.n => 10*S.n, tanh), Dense(10*S.n => S.n, sigmoid))
+		ps, state = Lux.setup(Random.default_rng(), tf)
+		p_node, re = destructure(ps)
+	else
+		tf = re = state = nothing
 	end
 
 	# If using subset of data for training then keep original and truncate tsteps
@@ -375,6 +385,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	
 	beta_a = 1:S.wt_incr:S.wt_steps
 	p = init_ode_param(u0,S; noise=noise)
+	if S.use_node p = vcat(p, p_node) end
 	f = generate_tf_activation_f(S.tf_in_num)
 
 	local result
@@ -386,11 +397,14 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		last_time = tsteps[length(w)]
 		ts = tsteps[tsteps .<= last_time]
 		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
-		ode_c! = (du, u, p, t) -> ode!(du, u, p, t, S, f, G)
-		prob = ODEProblem(ode_c!, u0, (0.0,last_time), p, saveat = ts,
+		diffeq! = S.use_node ?
+					(du, u, p, t) -> node!(du, u, p, t, S, tf, re, state, G) :
+					(du, u, p, t) -> ode!(du, u, p, t, S, f, G)
+		prob = ODEProblem(diffeq!, u0, (0.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		# if S.jump prob = jump_prob(prob,S) end
-		L = loss_args(u0,prob,predict,tsteps,hill_k,w,f,init_on,offset,noise_wait)
+		L = loss_args(u0,prob,predict,tsteps,hill_k,w,f,init_on,offset,
+						noise_wait,tf,re,state)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i > 1)
@@ -434,18 +448,21 @@ function setup_refine_fit(p, S, L)
 	predict = setup_diffeq_func(S);
 	G = S.f_data(S);
 	tspan = (L.tsteps[begin], L.tsteps[end])
-	ode_c! = (du, u, p, t) -> ode!(du, u, p, t, S, f, G)
-	prob = ODEProblem(ode_c!, L.u0, tspan, p, saveat = L.tsteps,
+	diffeq! = S.use_node ?
+				(du, u, p, t) -> node!(du, u, p, t, S, L.tf, L.re, L.state, G) :
+				(du, u, p, t) -> ode!(du, u, p, t, S, f, G)
+	prob = ODEProblem(diffeq!, L.u0, tspan, p, saveat = L.tsteps,
 					reltol = S.rtolR, abstol = S.atolR)
 	if (S.train_frac == 1.0)
 		prob_all = prob
 	else
-		prob_all = ODEProblem(ode_c!, L.u0, G.tspan, p, saveat = G.tsteps,
+		prob_all = ODEProblem(diffeq!, L.u0, G.tspan, p, saveat = G.tsteps,
 					reltol = S.rtolR, abstol = S.atolR)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end
 	w = ones(length(L.tsteps))
-	L = loss_args(L.u0,prob,predict,L.tsteps,L.hill_k,w,L.f,L.init_on,L.rand_offset,L.noise_wait)
+	L = loss_args(L.u0,prob,predict,L.tsteps,L.hill_k,w,L.f,L.init_on,L.rand_offset,
+			L.noise_wait,L.tf,L.re,L.state)
 	A = all_time(prob_all, G.tsteps)
 	return w, L, A
 end

@@ -1,5 +1,5 @@
 module OptTF_data
-using Plots
+using Plots, ChainRules
 export generate_circadian, circadian_val
 
 struct Circadian
@@ -36,21 +36,23 @@ function generate_circadian(S; init_on=false, rand_offset=false, noise_wait=0.0)
 		x = noise_wait / S.save_incr
 		prob_no_switch = x / (1+x)		# from negative binomial mean
 		switch = false
-		for i in 2:n
-			if rand() < prob_no_switch
-				mask[i] = mask[i-1]
-				switch = false
-			else
-				mask[i] = (mask[i-1] == 1.0) ? 0.0 : 1.0
-				push!(breakpoints,(i>2) ? i-2 : i-1)
-				push!(breakvalues,mask[i-1])
-				switch = true
+		ChainRules.ignore_derivatives() do	# Zygote can't handle, deriv 0
+			for i in 2:n
+				if rand() < prob_no_switch
+					mask[i] = mask[i-1]
+					switch = false
+				else
+					mask[i] = (mask[i-1] == 1.0) ? 0.0 : 1.0
+					push!(breakpoints,(i>2) ? i-2 : i-1)
+					push!(breakvalues,mask[i-1])
+					switch = true
+				end
 			end
-		end
-		if switch==false
-			push!(breakpoints,n)
-			push!(breakvalues,mask[n])
-		end
+			if switch==false
+				push!(breakpoints,n)
+				push!(breakvalues,mask[n])
+			end
+		end # ChainRules
 		input_noisy = mask .* input_true
 	else
 		input_noisy = copy(input_true)

@@ -57,7 +57,7 @@ test_range(xmin,xmax,top,offset) =
 					@assert minimum(xmin) >= offset && maximum(xmax) <= top+offset
 
 function test_param(p,S)
-	P = ode_parse_p(p,S)
+	P = ode_parse_p(S.use_node ? p[1:4S.n] : p, S)
 	no_offset = 0.0
 	test_range(P.m_a,S.m_rate,S.m_low_rate)
 	test_range(P.m_d,S.m_rate,S.m_low_rate)
