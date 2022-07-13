@@ -262,7 +262,7 @@ hill(m,k,x) = x^k/(m^k+x^k)
 function callback(p, loss_val, S, L, G, pred_all; doplot = true, show_all = true)
 	# printing gradient takes calculation time, turn off may yield speedup
 	if (S.print_grad)
-		grad = ForwardDiff.gradient(p->loss(p,S,L)[1], p)[1]
+		grad = calc_gradient(p,S,L)
 		gnorm = sqrt(sum(abs2, grad))
 		println(@sprintf("%5.3e; %5.3e", loss_val, gnorm))
 	else
@@ -329,8 +329,9 @@ function loss(p, S, L)
 	return loss, S, L, G, pred_all
 end
 
-# this uses zygote, which seems to be very slow, consider ForwardDiff
-calc_gradient(p,S,L) = gradient(p->loss(p,S,L)[1], p)[1]
+calc_gradient(p,S,L) = S.use_node ?
+							Zygote.gradient(p->loss(p,S,L)[1], p)[1] :
+							ForwardDiff.gradient(p->loss(p,S,L)[1], p)
 
 # For iterative fitting of times series
 function weights(a, tsteps, S; b=10.0, trunc=S.wt_trunc) 
