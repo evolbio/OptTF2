@@ -24,7 +24,7 @@ default_ode() = Settings(
 	max_it		= 200,
 	opt_dummy_u0= true,
 	jump 		= false,
-	diffusion	= false,
+	diffusion	= true,
 	batch 		= 1
 )
 
