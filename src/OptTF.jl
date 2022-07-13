@@ -2,7 +2,7 @@ module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Printf, DifferentialEquations,
 	Distributed, Optimization, OptimizationOptimJL, ForwardDiff, 	
 	Statistics, Plots, Distributions, Optimisers, Random, NNlib,
-	OptimizationOptimisers, Flux, DiffEqSensitivity
+	OptimizationOptimisers, Lux, DiffEqSensitivity
 include("OptTF_settings.jl")
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
@@ -48,7 +48,9 @@ load_data_warning = true
 	init_on				# boolean, light signal initially on or off
 	rand_offset			# boolean, offset day/night input signal
 	noise_wait			# ave waiting time to random on/off switch for day/night input
+	tf					# function for NODE
 	re					# function to reconstruct parameters for NODE
+	state				# state setup for NODE parameters
 end
 
 # When fit only to training data subset, then need full time period info
@@ -150,7 +152,7 @@ function ode!(du, u, p, t, S, f, G)
 	du[n+2] += S.light_prod_rate * intensity(light)
 end
 
-function node!(du, u, p, t, S, re, G)
+function node!(du, u, p, t, S, tf, re, state, G)
 	n = S.n
 	u_m = @view u[1:n]			# mRNA
 	u_p = @view u[n+1:2n]		# protein
@@ -168,7 +170,7 @@ function node!(du, u, p, t, S, re, G)
 	p_d = @view ppp[3n+1:4n]
 	
 	# remainder of p is for NN
-	f_val = re(p_nn)(u_p)
+	f_val = tf(u_p,re(p_nn),state)[1]
 	du[1:n] = m_a .* f_val .- m_d .* u_m		# mRNA level
 	du[n+1:2n] = p_a .* u_m .- p_d .* u_p		# protein level
 	light = G.circadian_val(G,t)			# noisy circadian input
@@ -301,7 +303,7 @@ end
 function loss(p, S, L)
 	G = S.f_data(S; init_on=L.init_on, rand_offset=L.rand_offset, noise_wait=L.noise_wait)
 	diffeq! = S.use_node ?
-				(du, u, p, t) -> node!(du, u, p, t, S, L.re, G) :
+				(du, u, p, t) -> node!(du, u, p, t, S, L.tf, L.re, L.state, G) :
 				(du, u, p, t) -> ode!(du, u, p, t, S, L.f, G)
 	# for SDE, cannot remake problem, so restate it
 	# if using diffusion or noise, must call solve only via loss()
@@ -368,9 +370,10 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	# for NODE
 	if S.use_node
 		tf = Chain(Dense(S.n => 10*S.n, tanh), Dense(10*S.n => S.n, sigmoid))
-		p_node, re = destructure(tf)
+		ps, state = Lux.setup(Random.default_rng(), tf)
+		p_node, re = destructure(ps)
 	else
-		re = nothing
+		tf = re = state = nothing
 	end
 
 	# If using subset of data for training then keep original and truncate tsteps
@@ -396,13 +399,13 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		ts = tsteps[tsteps .<= last_time]
 		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
 		diffeq! = S.use_node ?
-					(du, u, p, t) -> node!(du, u, p, t, S, re, G) :
+					(du, u, p, t) -> node!(du, u, p, t, S, tf, re, state, G) :
 					(du, u, p, t) -> ode!(du, u, p, t, S, f, G)
 		prob = ODEProblem(diffeq!, u0, (0.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		# if S.jump prob = jump_prob(prob,S) end
 		L = loss_args(u0,prob,predict,tsteps,hill_k,w,f,init_on,offset,
-						noise_wait,re)
+						noise_wait,tf,re,state)
 		# On first time through loop, set up params p for optimization. Following loop
 		# turns use the parameters returned from sciml_train(), which are in result.u
 		if (i > 1)
@@ -447,7 +450,7 @@ function setup_refine_fit(p, S, L)
 	G = S.f_data(S);
 	tspan = (L.tsteps[begin], L.tsteps[end])
 	diffeq! = S.use_node ?
-				(du, u, p, t) -> node!(du, u, p, t, S, L.re, G) :
+				(du, u, p, t) -> node!(du, u, p, t, S, L.tf, L.re, L.state, G) :
 				(du, u, p, t) -> ode!(du, u, p, t, S, f, G)
 	prob = ODEProblem(diffeq!, L.u0, tspan, p, saveat = L.tsteps,
 					reltol = S.rtolR, abstol = S.atolR)
@@ -460,7 +463,7 @@ function setup_refine_fit(p, S, L)
 	end
 	w = ones(length(L.tsteps))
 	L = loss_args(L.u0,prob,predict,L.tsteps,L.hill_k,w,L.f,L.init_on,L.rand_offset,
-			L.noise_wait,L.re)
+			L.noise_wait,L.tf,L.re,L.state)
 	A = all_time(prob_all, G.tsteps)
 	return w, L, A
 end
