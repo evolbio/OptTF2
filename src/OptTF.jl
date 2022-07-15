@@ -85,7 +85,7 @@ function generate_tf_activation_f(s; print_def=false)
 	end
 	# in call, lengths v,a,r are n, N, N-(s+1), with r augmented to N as vcat(ones(s+1),r)
 	# expression=Val{false} means compiled function returned instead of symbols
-	#   required otherwise cannot use in ode! call
+	#   required otherwise cannot use in ode call
 	f_expr = build_function(to_compute, v, a, r; expression=Val{false})
 	return eval(f_expr)
 end
@@ -107,7 +107,7 @@ calc_v(y, k, h) = (y ./ k).^h
 # p as parameters and y as full array of TF concentrations, S as settings
 # see OptTF_param.ode_parse_p(p,S) for parameter extraction
 # no longer using ode_parse_p because it is slow, see git version 5ca1483 for original
-# of calc_f and ode!
+# of calc_f and ode
 get_y(y,S,i) = (S.n == S.tf_in_num) ? y : getindex(y,S.tf_in[i])
 
 function calc_f(f,p,y,S)
@@ -123,8 +123,9 @@ intensity(x) = 10.0^(6.0*(x-1.0))
 
 # f is TF activation, g is external input
 # protein 1 is output, protein 2 influenced by input, m=2, n>=2
-function ode!(du, u, p, t, S, f, G)
+function ode(u, p, t, S, f, G)
 	n = S.n
+	du = Vector{Float64}(undef,2n)
 	u_m = @view u[1:n]			# mRNA
 	u_p = @view u[n+1:2n]		# protein
 	
@@ -150,9 +151,10 @@ function ode!(du, u, p, t, S, f, G)
 	light = G.circadian_val(G,t)				# noisy circadian input
 	# fast extra production rate by post-translation modification or allostery
 	du[n+2] += S.light_prod_rate * intensity(light)
+	return du
 end
 
-function node!(du, u, p, t, S, tf, re, state, G)
+function node(u, p, t, S, tf, re, state, G)
 	n = S.n
 	u_m = @view u[1:n]			# mRNA
 	u_p = @view u[n+1:2n]		# protein
@@ -171,11 +173,12 @@ function node!(du, u, p, t, S, tf, re, state, G)
 	
 	# remainder of p is for NN
 	f_val = tf(u_p,re(p_nn),state)[1]
-	du[1:n] = m_a .* f_val .- m_d .* u_m		# mRNA level
-	du[n+1:2n] = p_a .* u_m .- p_d .* u_p		# protein level
+	du_m = m_a .* f_val .- m_d .* u_m		# mRNA level
+	du_p = p_a .* u_m .- p_d .* u_p		  	# protein level
 	light = G.circadian_val(G,t)			# noisy circadian input
 	# fast extra production rate by post-translation modification or allostery
-	du[n+2] += S.light_prod_rate * intensity(light)
+	du_p_2 = du_p[2] + S.light_prod_rate * intensity(light)
+	return [du_m; du_p[1]; du_p_2; du_p[3:end]]
 end
 
 ########################
@@ -190,9 +193,7 @@ sqrt_abs(x) = (x > 16.) ? sqrt(x) : abs(x) / 4.
 # sqrt_abs(x,k) = (x > k) ? sqrt(x) : abs(x) / sqrt(k)
 # sqrt_abs(x) = (x > 1.0) ? sqrt(x) : 0.0
 # sqrt_abs(x) = sqrt(abs(x))
-function ode_noise!(du, u, p, t)
-	du .= sqrt_abs.(u)
-end
+ode_noise(u, p, t) = sqrt_abs.(u)
 
 # callback setup to handle with negative values
 affect!(integrator) = integrator.u .= abs.(integrator.u) 
@@ -302,19 +303,19 @@ end
 
 function loss(p, S, L)
 	G = S.f_data(S; init_on=L.init_on, rand_offset=L.rand_offset, noise_wait=L.noise_wait)
-	diffeq! = S.use_node ?
-				(du, u, p, t) -> node!(du, u, p, t, S, L.tf, L.re, L.state, G) :
-				(du, u, p, t) -> ode!(du, u, p, t, S, L.f, G)
+	diffeq = S.use_node ?
+				(u, p, t) -> node(u, p, t, S, L.tf, L.re, L.state, G) :
+				(u, p, t) -> ode(u, p, t, S, L.f, G)
 	# for SDE, cannot remake problem, so restate it
 	# if using diffusion or noise, must call solve only via loss()
 	# consider callback=cb_zero to handle issues with negative values
 	if S.diffusion
-		prob = SDEProblem(diffeq!, ode_noise!, L.u0, L.prob.tspan, p,
+		prob = SDEProblem(diffeq, ode_noise, L.u0, L.prob.tspan, p,
 						reltol = S.rtol, abstol = S.atol,
 						callback=nothing, saveat = values(L.prob.kwargs).saveat,
 						maxiters=1e6)
 	else
-		prob = remake(L.prob, f=diffeq!)
+		prob = remake(L.prob, f=diffeq)
 	end
 	pred_all = L.predict(p, prob)
 
@@ -369,9 +370,10 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	
 	# for NODE
 	if S.use_node
-		tf = Chain(Dense(S.n => 10*S.n, tanh), Dense(10*S.n => S.n, sigmoid))
+		tf = Chain(Dense(S.n => 5*S.n, mish), Dense(5*S.n => S.n, sigmoid))
 		ps, state = Lux.setup(Random.default_rng(), tf)
 		p_node, re = destructure(ps)
+		p_node = Lux.glorot_uniform(Random.default_rng(), length(p_node); gain = 2)
 	else
 		tf = re = state = nothing
 	end
@@ -397,11 +399,11 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		hill_k = hill_k_init# + i/5
 		last_time = tsteps[length(w)]
 		ts = tsteps[tsteps .<= last_time]
-		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode!
-		diffeq! = S.use_node ?
-					(du, u, p, t) -> node!(du, u, p, t, S, tf, re, state, G) :
-					(du, u, p, t) -> ode!(du, u, p, t, S, f, G)
-		prob = ODEProblem(diffeq!, u0, (0.0,last_time), p, saveat = ts,
+		# for ODE and opt_dummy, may redefine u0 and p, here just need right sizes for ode
+		diffeq = S.use_node ?
+					(u, p, t) -> node(u, p, t, S, tf, re, state, G) :
+					(u, p, t) -> ode(u, p, t, S, f, G)
+		prob = ODEProblem(diffeq, u0, (0.0,last_time), p, saveat = ts,
 						reltol = S.rtol, abstol = S.atol)
 		# if S.jump prob = jump_prob(prob,S) end
 		L = loss_args(u0,prob,predict,tsteps,hill_k,w,f,init_on,offset,
@@ -449,15 +451,15 @@ function setup_refine_fit(p, S, L)
 	predict = setup_diffeq_func(S);
 	G = S.f_data(S);
 	tspan = (L.tsteps[begin], L.tsteps[end])
-	diffeq! = S.use_node ?
-				(du, u, p, t) -> node!(du, u, p, t, S, L.tf, L.re, L.state, G) :
-				(du, u, p, t) -> ode!(du, u, p, t, S, f, G)
-	prob = ODEProblem(diffeq!, L.u0, tspan, p, saveat = L.tsteps,
+	diffeq = S.use_node ?
+				(u, p, t) -> node(u, p, t, S, L.tf, L.re, L.state, G) :
+				(u, p, t) -> ode(u, p, t, S, f, G)
+	prob = ODEProblem(diffeq, L.u0, tspan, p, saveat = L.tsteps,
 					reltol = S.rtolR, abstol = S.atolR)
 	if (S.train_frac == 1.0)
 		prob_all = prob
 	else
-		prob_all = ODEProblem(diffeq!, L.u0, G.tspan, p, saveat = G.tsteps,
+		prob_all = ODEProblem(diffeq, L.u0, G.tspan, p, saveat = G.tsteps,
 					reltol = S.rtolR, abstol = S.atolR)
 		if S.jump prob_all = jump_prob(prob_all,S) end		
 	end

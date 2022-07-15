@@ -17,14 +17,14 @@ default_ode() = Settings(
 	n			= 3,
 	tf_in_num	= 3,
 	rtol		= 1e-4,
-	atol		= 1e-6,
+	atol		= 1e-5,
 	adm_learn	= 0.002,
 	days		= 6.0,
 	train_frac	= 2/3,
-	max_it		= 200,
+	max_it		= 150,
 	opt_dummy_u0= true,
 	jump 		= false,
-	diffusion	= true,
+	diffusion	= false,
 	batch 		= 1
 )
 
