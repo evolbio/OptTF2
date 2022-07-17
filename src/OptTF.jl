@@ -111,9 +111,9 @@ calc_v(y, k, h) = (y ./ k).^h
 get_y(y,S,i) = (S.n == S.tf_in_num) ? y : getindex(y,S.tf_in[i])
 
 function calc_f(f,p,y,S)
-	y .= trunc_zero.(y)
+	yy = trunc_zero.(y)
 	@views [f(
-	 calc_v(get_y(y,S,i),p[f_range(S.bk,S.s,i)],p[f_range(S.bh,S.s,i)]),
+	 calc_v(get_y(yy,S,i),p[f_range(S.bk,S.s,i)],p[f_range(S.bh,S.s,i)]),
 	 p[f_range(S.ba,S.N,i)],
 	 set_r(p[f_range(S.br,S.ri,i)],S.tf_in_num)) for i in 1:S.n]
 end
@@ -125,18 +125,17 @@ intensity(x) = 10.0^(6.0*(x-1.0))
 # protein 1 is output, protein 2 influenced by input, m=2, n>=2
 function ode(u, p, t, S, f, G)
 	n = S.n
-	du = Vector{Float64}(undef,2n)
 	u_m = @view u[1:n]			# mRNA
 	u_p = @view u[n+1:2n]		# protein
 	
 	pp = linear_sigmoid.(p, S.d, S.k1, S.k2)	# normalizes on [0,1] w/linear_sigmoid 
 	# set min on rates m_a, m_d, p_a, p_d, causes top to be p_max + p_min
-	pp .= (pp .* S.p_mult) .+ S.p_min
+	ppp = (pp .* S.p_mult) .+ S.p_min
 
-	m_a = @view pp[1:n]
-	m_d = @view pp[n+1:2n]
-	p_a = @view pp[2n+1:3n]
-	p_d = @view pp[3n+1:4n]
+	m_a = @view ppp[1:n]
+	m_d = @view ppp[n+1:2n]
+	p_a = @view ppp[2n+1:3n]
+	p_d = @view ppp[3n+1:4n]
 	
 	# for testing, set rate parameters to constants, all optimizing via f_val
 	# m_a = 1e-2 * ones(n) * S.s_per_d
@@ -144,14 +143,14 @@ function ode(u, p, t, S, f, G)
 	# p_a = 1e-1 * ones(n) * S.s_per_d
 	# p_d = 1e-3 * ones(n) * S.s_per_d
 
-	f_val = calc_f(f,pp,u_p,S)
+	f_val = calc_f(f,ppp,u_p,S)
 
-	du[1:n] = m_a .* f_val .- m_d .* u_m		# mRNA level
-	du[n+1:2n] = p_a .* u_m .- p_d .* u_p		# protein level
+	du_m = m_a .* f_val .- m_d .* u_m		# mRNA level
+	du_p = p_a .* u_m .- p_d .* u_p		# protein level
 	light = G.circadian_val(G,t)				# noisy circadian input
 	# fast extra production rate by post-translation modification or allostery
-	du[n+2] += S.light_prod_rate * intensity(light)
-	return du
+	du_p_2 = du_p[2] + S.light_prod_rate * intensity(light)
+	return [du_m; du_p[1]; du_p_2; du_p[3:end]]
 end
 
 function node(u, p, t, S, tf, re, state, G)

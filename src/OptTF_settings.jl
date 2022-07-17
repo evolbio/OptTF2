@@ -11,14 +11,14 @@ export Settings, default_ode, reset_rseed
 # See docs for Parameters.jl package
 
 default_ode() = Settings(
-	use_node	= true,
+	use_node	= false,
 	allow_self 	= true,
 	gr_type 	= 1,
-	n			= 4,
-	tf_in_num	= 4,
+	n			= 8,
+	tf_in_num	= 8,
 	rtol		= 1e-4,
-	atol		= 1e-5,
-	adm_learn	= 0.003,
+	atol		= 1e-6,
+	adm_learn	= 0.002,
 	days		= 6.0,
 	train_frac	= 2/3,
 	max_it		= 150,
