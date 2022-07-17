@@ -370,10 +370,18 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	
 	# for NODE
 	if S.use_node
-		tf = Chain(Dense(S.n => 5*S.n, mish), Dense(5*S.n => S.n, sigmoid))
+		ns = 7		# inner nodes per layer * num inputs
+		layers = 2	# number inner layers
+		in_layer = Dense(S.n => ns*S.n, identity)
+		out_layer = Dense(ns*S.n => S.n, x -> hill(1,2,abs(x)))
+		mid_layer = Dense(ns*S.n => ns*S.n, x -> hill(1,2,abs(x)))
+
+		tf = Chain([x -> (log ∘ abs).(x), in_layer,
+					[mid_layer for l in 1:layers]..., out_layer])
+
 		ps, state = Lux.setup(Random.default_rng(), tf)
 		p_node, re = destructure(ps)
-		p_node = Lux.glorot_uniform(Random.default_rng(), length(p_node); gain = 2)
+		p_node = Lux.glorot_normal(Random.default_rng(), length(p_node); gain = 3)
 	else
 		tf = re = state = nothing
 	end
