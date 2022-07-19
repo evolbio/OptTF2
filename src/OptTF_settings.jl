@@ -11,11 +11,10 @@ export Settings, default_ode, reset_rseed
 # See docs for Parameters.jl package
 
 default_ode() = Settings(
-	use_node	= false,
+	use_node	= true,
 	allow_self 	= true,
 	gr_type 	= 1,
-	n			= 8,
-	tf_in_num	= 8,
+	n			= 4,
 	rtol		= 1e-4,
 	atol		= 1e-6,
 	adm_learn	= 0.002,
@@ -71,7 +70,7 @@ m = 2
 # no self connections by this algorithm
 allow_self = false		# allow self connections
 gr_type = 2				# 1 => random, 2 => cycle for use in matching repressilator 
-tf_in_num = 4			# should be <= n-1 if self avoided, <= if w/self
+tf_in_num = n			# should be <= n-1 if self avoided, <= if w/self
 @assert tf_in_num <= n "allow_self and tf_in_num ($tf_in_num) greater than n ($n)"
 @assert (allow_self || tf_in_num < n) "!allow_self and tf_in_num ($tf_in_num) greater than n-1"
 # if (allow_self && tf_in_num > n)

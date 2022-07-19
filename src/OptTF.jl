@@ -369,14 +369,28 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	
 	# for NODE
 	if S.use_node
-		ns = 7		# inner nodes per layer * num inputs
-		layers = 2	# number inner layers
-		in_layer = Dense(S.n => ns*S.n, identity)
-		out_layer = Dense(ns*S.n => S.n, x -> hill(1,2,abs(x)))
-		mid_layer = Dense(ns*S.n => ns*S.n, x -> hill(1,2,abs(x)))
-
-		tf = Chain([x -> (log ∘ abs).(x), in_layer,
+		ns = 5		# inner nodes per layer * num inputs
+		layers = 0	# number inner layers
+		# mid-layer activation: try mish, swish, x -> hill(1,2,abs(x))
+		act_in = mish
+		act_mid = mish
+		act_out = sigmoid		# x -> hill(1,2,abs(x)) or sigmoid
+		in_layer = Dense(S.n => ns*S.n, act_in)
+		mid_layer = Dense(ns*S.n => ns*S.n, act_mid)
+		
+		parallel = true
+		out_layer = parallel ? Dense(ns*S.n => 1, act_out) : Dense(ns*S.n => S.n, act_out)
+		
+		# parallel passes input to each separate pathway, one path for each output
+		# vcat combines individual outputs back into single output vector
+		if parallel
+			tf = Chain(x -> (log ∘ abs).(x),
+				Parallel(vcat,[Chain(in_layer,[mid_layer for l in 1:layers]...,out_layer)
+					for i in 1:S.n]...))
+		else
+			tf = Chain([x -> (log ∘ abs).(x), in_layer,
 					[mid_layer for l in 1:layers]..., out_layer])
+		end
 
 		ps, state = Lux.setup(Random.default_rng(), tf)
 		p_node, re = destructure(ps)
