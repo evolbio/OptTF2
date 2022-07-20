@@ -10,9 +10,12 @@ p_opt1,L,A  = fit_diffeq(S;noise=0.5, noise_wait=1000.0, hill_k_init=2.0);
 
 # If using a subset of data for training, then need L_all with full time period for all data
 # L always refers to training period, which may or may not be all time steps
+
+tf, re, state, _ = generate_tf_node(S);			# must regenerate tf function
+L = loss_args(L; tf=tf, re=re, state=state);
 L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
 
-p_opt2 = refine_fit_bfgs(p_opt1,S,L)
+p_opt2 = refine_fit_bfgs(p_opt1,S,L)			# or p_opt2=p_opt1;
 
 # run bfgs a second time if desired
 # p_opt2 = refine_fit_bfgs(p_opt2,S,L)
@@ -40,9 +43,8 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "stoch-3-3_2_t6.jld2"
-#f_name = "circad-3-3_4_t6.jld2"
-mv(S.out_file, S.proj_dir * "/output/" * f_name)
+f_name = "node-8_1_t4.jld2"
+mv(S.out_file, S.proj_dir * "/output_node/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
 rm.(tmp_list[occursin.(S.start_time,tmp_list)]);
@@ -101,11 +103,12 @@ plot_percentiles([basef * "_test_w1000"]; data_dir="/Users/steve/Desktop/plots/t
 
 using OptTF, DifferentialEquations
 proj_dir = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
-basefile = proj_dir * "output/stoch-4-4_1_w2";
+basefile = proj_dir * "output_node/node-8_1_t4";
 dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
 S = dt.S;
 ff = generate_tf_activation_f(dt.S.tf_in_num);
-L = loss_args(dt.L; f=ff);
+tf, re, state, _ = generate_tf_node(S);			# must regenerate tf function
+L = loss_args(dt.L; tf=tf, re=re, state=state, f=ff);
 
 S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
 

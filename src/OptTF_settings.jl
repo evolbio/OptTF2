@@ -1,27 +1,24 @@
 module OptTF_settings
 include("OptTF_data.jl")
 using .OptTF_data
-using Parameters, DifferentialEquations, Dates, Random, StatsBase
+using Parameters, DifferentialEquations, Dates, Random, StatsBase, NNlib
 export Settings, default_ode, reset_rseed
 
 # One can initialize and then modify settings as follows
 # S = Settings(S; layer_size=50, activate=3, [ADD OTHER OPTIONS AS NEEDED])
 # S = default_ode()		# default settings for ODE
 # S = Settings(S; opt_dummy_u0 = true, [ADD OTHER OPTIONS AS NEEDED])
+# However, many variables are calculated from others, so often best to start over
 # See docs for Parameters.jl package
 
 default_ode() = Settings(
-	use_node	= true,
-	allow_self 	= true,
-	gr_type 	= 1,
-	n			= 4,
+	n			= 8,
 	rtol		= 1e-4,
 	atol		= 1e-6,
 	adm_learn	= 0.002,
 	days		= 6.0,
 	train_frac	= 2/3,
 	max_it		= 150,
-	opt_dummy_u0= true,
 	jump 		= false,
 	diffusion	= false,
 	batch 		= 1
@@ -39,7 +36,7 @@ end
 @with_kw struct Settings
 
 # use NODE for TF network input-output
-use_node = false
+use_node = true
 
 # function to generate or load data for fitting
 f_data = generate_circadian
@@ -67,9 +64,18 @@ m = 2
 @assert n >= m
 @assert m >= 2
 
+# NN structure for NODE runs
+ns = 5		# inner nodes per layer * num inputs
+layers = 0	# number inner layers
+# mid-layer activation: try mish, swish, x -> hill(1,2,abs(x))
+act_in = mish
+act_mid = mish
+act_out = sigmoid		# x -> hill(1,2,abs(x)) or sigmoid
+parallel = true
+
 # no self connections by this algorithm
-allow_self = false		# allow self connections
-gr_type = 2				# 1 => random, 2 => cycle for use in matching repressilator 
+allow_self = true		# allow self connections
+gr_type = 1				# 1 => random, 2 => cycle for use in matching repressilator 
 tf_in_num = n			# should be <= n-1 if self avoided, <= if w/self
 @assert tf_in_num <= n "allow_self and tf_in_num ($tf_in_num) greater than n ($n)"
 @assert (allow_self || tf_in_num < n) "!allow_self and tf_in_num ($tf_in_num) greater than n-1"
@@ -90,7 +96,7 @@ tf_in =
 	[sort(sample(vcat(1:i-1,i+1:n) , tf_in_num, replace=false)) for i in 1:n] # no self
   end
 
-opt_dummy_u0 = false	# optimize dummy init values instead of using rand values
+opt_dummy_u0 = true	# optimize dummy init values instead of using rand values
 
 # Larger tolerances are faster but errors make gradient descent more challenging
 # However, fit is sensitive to tolerances
@@ -148,7 +154,6 @@ bh = bk+n*s
 ba = bh+n*s
 br = ba+n*N
 ri = N - (s+1)
-
 
 start_time = Dates.format(now(),"yyyymmdd_HHMMSS")
 proj_dir = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF"

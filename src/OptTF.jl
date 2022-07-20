@@ -13,7 +13,8 @@ using .OptTF_plots
 using .OptTF_data
 export generate_tf_activation_f, calc_v, set_r, mma, fit_diffeq, make_loss_args_all,
 			refine_fit_bfgs, refine_fit, setup_refine_fit, loss, save_data, 
-			load_data, remake_days_train, loss_args, callback, mma, hill
+			load_data, remake_days_train, loss_args, callback, mma, hill,
+			generate_tf_node
 export Settings, default_ode, reset_rseed					# from OptTF_settings
 export generate_circadian, circadian_val					# from OptTF_data
 export plot_callback, plot_stoch, plot_temp, plot_stoch_dev_dur, save_summary_plots,
@@ -116,6 +117,35 @@ function calc_f(f,p,y,S)
 	 calc_v(get_y(yy,S,i),p[f_range(S.bk,S.s,i)],p[f_range(S.bh,S.s,i)]),
 	 p[f_range(S.ba,S.N,i)],
 	 set_r(p[f_range(S.br,S.ri,i)],S.tf_in_num)) for i in 1:S.n]
+end
+
+function generate_tf_node(S)
+	if S.use_node
+		in_layer = Dense(S.n => S.ns*S.n, S.act_in)
+		mid_layer = Dense(S.ns*S.n => S.ns*S.n, S.act_mid)
+		
+		out_layer = S.parallel ?
+						Dense(S.ns*S.n => 1, S.act_out) :
+						Dense(S.ns*S.n => S.n, S.act_out)
+		
+		# parallel passes input to each separate pathway, one path for each output
+		# vcat combines individual outputs back into single output vector
+		if S.parallel
+			tf = Chain(x -> (log ∘ abs).(x),
+				Parallel(vcat,[Chain(in_layer,[mid_layer for l in 1:S.layers]...,out_layer)
+					for i in 1:S.n]...))
+		else
+			tf = Chain([x -> (log ∘ abs).(x), in_layer,
+					[mid_layer for l in 1:S.layers]..., out_layer])
+		end
+
+		ps, state = Lux.setup(Random.default_rng(), tf)
+		p_node, re = destructure(ps)
+		p_node = Lux.glorot_normal(Random.default_rng(), length(p_node); gain = 3)
+	else
+		tf = re = state = p_node = nothing
+	end
+	return tf, re, state, p_node
 end
 
 # assumes x on [0,1], so intensity on [10^-6,1], 10^-3 arbitrary day/night transition
@@ -367,38 +397,6 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 	G = S.f_data(S; init_on=init_on, rand_offset=offset, noise_wait=noise_wait);
 	predict = setup_diffeq_func(S);
 	
-	# for NODE
-	if S.use_node
-		ns = 5		# inner nodes per layer * num inputs
-		layers = 0	# number inner layers
-		# mid-layer activation: try mish, swish, x -> hill(1,2,abs(x))
-		act_in = mish
-		act_mid = mish
-		act_out = sigmoid		# x -> hill(1,2,abs(x)) or sigmoid
-		in_layer = Dense(S.n => ns*S.n, act_in)
-		mid_layer = Dense(ns*S.n => ns*S.n, act_mid)
-		
-		parallel = true
-		out_layer = parallel ? Dense(ns*S.n => 1, act_out) : Dense(ns*S.n => S.n, act_out)
-		
-		# parallel passes input to each separate pathway, one path for each output
-		# vcat combines individual outputs back into single output vector
-		if parallel
-			tf = Chain(x -> (log ∘ abs).(x),
-				Parallel(vcat,[Chain(in_layer,[mid_layer for l in 1:layers]...,out_layer)
-					for i in 1:S.n]...))
-		else
-			tf = Chain([x -> (log ∘ abs).(x), in_layer,
-					[mid_layer for l in 1:layers]..., out_layer])
-		end
-
-		ps, state = Lux.setup(Random.default_rng(), tf)
-		p_node, re = destructure(ps)
-		p_node = Lux.glorot_normal(Random.default_rng(), length(p_node); gain = 3)
-	else
-		tf = re = state = nothing
-	end
-
 	# If using subset of data for training then keep original and truncate tsteps
 	tsteps = tsteps_all = G.tsteps
 	tspan = tspan_all = G.tspan
@@ -407,6 +405,7 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 		tspan = (tsteps[begin], tsteps[end])
 	end
 	
+	tf, re, state, p_node = generate_tf_node(S)
 	beta_a = 1:S.wt_incr:S.wt_steps
 	p = init_ode_param(u0,S; noise=noise)
 	if S.use_node p = vcat(p, p_node) end
