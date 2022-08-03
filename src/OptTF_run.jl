@@ -43,7 +43,7 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "node-8_1_t4.jld2"
+f_name = "node-4_3_t4.jld2"
 mv(S.out_file, S.proj_dir * "/output_node/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
@@ -64,39 +64,36 @@ p_opt2 = refine_fit(p_opt2,S,L)
 # save as above with different file name
 
 ###################################################################
-# Load tmp file and then save with full jld2 data for plotting
+# some plots from saved file
 
 using OptTF, DifferentialEquations
 
-proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
-basef = "20220625_144545_34";
-basefile = proj_output * basef;
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
+basefile = proj_output * "output/circad-5-5_w2_stoch_1_t6";
 dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
 S = dt.S;
 ff = generate_tf_activation_f(dt.S.tf_in_num);
-L = loss_args(dt.L; f=ff);
+tf, re, state, _ = generate_tf_node(S);			# must regenerate tf function
+L = loss_args(dt.L; tf=tf, re=re, state=state, f=ff);
 
-loss_v, _, _, GG, pred = loss(dt.p,S,L);
-S, L, L_all, G = remake_days_train(dt.p, S, L; days=S.days, train_frac=S.train_frac);
-save_data(dt.p, S, L, GG, L_all, loss_v, pred; file= basefile * "_test.jld2")
+# choose one for deterministic or stochastic plots
+S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
+S = Settings(dt.S; diffusion=true, batch=5, solver=ISSEM());
 
-# plot directory must have "tmp" subdirectory otherwise will fail
-save_summary_plots("../tmp/" * basef * "_test"; samples=1000,
-					plot_dir="/Users/steve/Desktop/plots/tmp/");
+# set time period
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train_frac/2);
+# alternatively, set fixed period
+new_days = 36;
+new_train_frac = dt.S.train_frac / (new_days / dt.S.days);
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=new_days, 
+										train_frac=new_train_frac);
 
-plot_percentiles([basef * "_test"]; data_dir="/Users/steve/Desktop/plots/tmp/",
-				use_duration=false, show_days=[10,20,30])
+# plots
+plot_stoch(dt.p, S, L, G, L_all; samples=1, display_plot=true)	# increase samples as needed
 
-# change noise_wait and redo
-L = loss_args(L; noise_wait=1000.0);
-loss_v, _, _, GG, pred = loss(dt.p,S,L);
-S, L, L_all, G = remake_days_train(dt.p, S, L; days=S.days, train_frac=S.train_frac);
-save_data(dt.p, S, L, GG, L_all, loss_v, pred; file= basefile * "_test_w1000.jld2")
-save_summary_plots("../tmp/" * basef * "_test_w1000"; samples=1000,
-					plot_dir="/Users/steve/Desktop/plots/tmp/");
+loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
+plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=false)
 
-plot_percentiles([basef * "_test_w1000"]; data_dir="/Users/steve/Desktop/plots/tmp/",
-				use_duration=false, show_days=[10,20,30])
 
 ###################################################################
 # Load results and complete optimization using OptTF, DifferentialEquations
@@ -139,35 +136,40 @@ loss_v, _, _, GG, pred = loss(p_opt2,S,L);
 save_data(p_opt2, S, L, GG, L_all, loss_v, pred; file=basefile * "_t6_h5.jld2")
 
 ###################################################################
-# some plots from saved file
+# Load tmp file and then save with full jld2 data for plotting
 
 using OptTF, DifferentialEquations
 
-proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
-basefile = proj_output * "output/circad-5-5_w2_stoch_1_t6";
+proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/tmp/";
+basef = "20220720_084507_17";
+basefile = proj_output * basef;
 dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
 S = dt.S;
 ff = generate_tf_activation_f(dt.S.tf_in_num);
-L = loss_args(dt.L; f=ff);
+tf, re, state, _ = generate_tf_node(S);			# must regenerate tf function
+L = loss_args(dt.L; tf=tf, re=re, state=state, f=ff);
 
-# choose one for deterministic or stochastic plots
-S = Settings(dt.S; diffusion=false, batch=1, solver=Tsit5());
-S = Settings(dt.S; diffusion=true, batch=5, solver=ISSEM());
+loss_v, _, _, GG, pred = loss(dt.p,S,L);
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=S.days, train_frac=S.train_frac);
+save_data(dt.p, S, L, GG, L_all, loss_v, pred; file= basefile * "_test.jld2")
 
-# set time period
-S, L, L_all, G = remake_days_train(dt.p, S, L; days=2*S.days, train_frac=S.train_frac/2);
-# alternatively, set fixed period
-new_days = 36;
-new_train_frac = dt.S.train_frac / (new_days / dt.S.days);
-S, L, L_all, G = remake_days_train(dt.p, S, L; days=new_days, 
-										train_frac=new_train_frac);
+# plot directory must have "tmp" subdirectory otherwise will fail
+save_summary_plots("../tmp/" * basef * "_test"; samples=1000,
+					plot_dir="/Users/steve/Desktop/plots/tmp/");
 
-# plots
-plot_stoch(dt.p, S, L, G, L_all; samples=1, display_plot=true)	# increase samples as needed
+plot_percentiles([basef * "_test"]; data_dir="/Users/steve/Desktop/plots/tmp/",
+				use_duration=false, show_days=[10,20,30])
 
-loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
-plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=false)
+# change noise_wait and redo
+L = loss_args(L; noise_wait=1000.0);
+loss_v, _, _, GG, pred = loss(dt.p,S,L);
+S, L, L_all, G = remake_days_train(dt.p, S, L; days=S.days, train_frac=S.train_frac);
+save_data(dt.p, S, L, GG, L_all, loss_v, pred; file= basefile * "_test_w1000.jld2")
+save_summary_plots("../tmp/" * basef * "_test_w1000"; samples=1000,
+					plot_dir="/Users/steve/Desktop/plots/tmp/");
 
+plot_percentiles([basef * "_test_w1000"]; data_dir="/Users/steve/Desktop/plots/tmp/",
+				use_duration=false, show_days=[10,20,30])
 
 ###################################################################
 # Look at optimized parameters

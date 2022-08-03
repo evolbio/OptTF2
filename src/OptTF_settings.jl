@@ -12,7 +12,7 @@ export Settings, default_ode, reset_rseed
 # See docs for Parameters.jl package
 
 default_ode() = Settings(
-	n			= 8,
+	n			= 4,
 	rtol		= 1e-4,
 	atol		= 1e-6,
 	adm_learn	= 0.002,
@@ -20,8 +20,8 @@ default_ode() = Settings(
 	train_frac	= 2/3,
 	max_it		= 150,
 	jump 		= false,
-	diffusion	= false,
-	batch 		= 1
+	diffusion	= true,
+	batch 		= 12
 )
 
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
