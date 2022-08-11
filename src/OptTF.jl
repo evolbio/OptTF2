@@ -2,7 +2,7 @@ module OptTF
 using Symbolics, Combinatorics, Parameters, JLD2, Printf, DifferentialEquations,
 	Distributed, Optimization, OptimizationOptimJL, ForwardDiff, 	
 	Statistics, Plots, Distributions, Optimisers, Random, NNlib,
-	OptimizationOptimisers, Lux, DiffEqSensitivity
+	OptimizationOptimisers, Lux, SciMLSensitivity
 include("OptTF_settings.jl")
 include("OptTF_param.jl")
 include("OptTF_plots.jl")
@@ -378,7 +378,8 @@ end
 # Note: my "p" is documentation's "u" and vice versa
 opt_func(S,L) = OptimizationFunction(
 			(p,u) -> (S.batch == 1) ? loss(p,S,L) : loss_batch(p,S,L),
-			S.use_node ? Optimization.AutoZygote() : Optimization.AutoForwardDiff())
+			(S.use_node && !S.diffusion) ? Optimization.AutoZygote() : 		
+											Optimization.AutoForwardDiff())
 opt_prob(p,S,L) = OptimizationProblem(opt_func(S,L), p, L.u0)
 
 # new_rseed true uses new seed, false reuses preset_seed

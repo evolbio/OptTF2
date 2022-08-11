@@ -20,8 +20,8 @@ default_ode() = Settings(
 	train_frac	= 2/3,
 	max_it		= 150,
 	jump 		= false,
-	diffusion	= true,
-	batch 		= 12
+	diffusion	= false,
+	batch 		= 1
 )
 
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
@@ -197,7 +197,8 @@ wt_incr = 1			# increment for i = 1:wt_incr:wt_steps, see above
 # Likely it is oscillatory dynamics that cause the difficulty.
 
 # For SDE, ISSEM is only solver that seems to work, probably because of
-# large size of noise terms
+# large size of noise terms, however, if ForwardDiff and raising tolerances,
+# could use SRA3 or SOSRI
 # 
 # Might need higer adm_learn parameter with stiff solvers, which are
 # more likely to get trapped in local minimum. 
@@ -205,7 +206,7 @@ wt_incr = 1			# increment for i = 1:wt_incr:wt_steps, see above
 # Or maybe the stiff solvers provide less error fluctuation
 # and so need greater learning momentum to shake out of local minima ??
 
-solver = diffusion ? ISSEM() : Tsit5()	# Rodas4P() or Tsit5()
+solver = diffusion ? ISSEM() : Tsit5()	# Rodas4P() or Tsit5() or ISSEM()
 
 end # struct
 

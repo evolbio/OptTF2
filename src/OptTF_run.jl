@@ -225,7 +225,7 @@ L = OptTF.loss_args(u0,prob,predict,tsteps,hill_k,w,f,false,false,0.0);
 @btime ForwardDiff.gradient(p->loss(p,S,L)[1], p)[1];
 
 # uses Zygote, often fails, slower than ForwardDiff for smaller length(p)
-using Zygote,  DiffEqSensitivity
+using Zygote,  SciMLSensitivity
 @btime Zygote.gradient(p->loss(p,S,L)[1], p)[1];
 
 
