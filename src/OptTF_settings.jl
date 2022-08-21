@@ -13,15 +13,15 @@ export Settings, default_ode, reset_rseed
 
 default_ode() = Settings(
 	n			= 4,
-	rtol		= 1e-4,
-	atol		= 1e-6,
+	rtol		= 1e-3,
+	atol		= 1e-3,
 	adm_learn	= 0.002,
 	days		= 6.0,
 	train_frac	= 2/3,
 	max_it		= 150,
 	jump 		= false,
-	diffusion	= false,
-	batch 		= 1
+	diffusion	= true,
+	batch 		= 12
 )
 
 reset_rseed(S, rseed) = Settings(S; generate_rand_seed=false, preset_seed=rseed,
