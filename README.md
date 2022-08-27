@@ -10,9 +10,11 @@ by Steven A. Frank, https://stevefrank.org
 
 ---
 
-Only on Zenodo at https://doi.org/10.5281/zenodo.6798421, the directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript plus many other sample runs. Zenodo also includes the GitHub code tagged as version zenodo_1.0. 
+Only on Zenodo at https://doi.org/10.5281/zenodo.6798420, the directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript plus many other sample runs. Zenodo also includes the GitHub code tagged as version zenodo_1.1. 
 
 [GitHub](https://github.com/evolbio/OptTF) has the source code along with this file but without the output/ and analysis/ directories. Small updates will be posted on GitHub without updating the Zenodo version. In other words, GitHub is the best place for the source code, and Zenodo is the best place for the extra files in the output/ and analysis/ directories.
+
+The final section of this README file provides a brief summary of each the .jl script files in the src/ directory.
 
 # Getting started with the code
 
@@ -153,3 +155,33 @@ Various combinations of the additional commands in the src/OptTF_run.jl code for
 
 Many detailed plots can be made with the code in src/OptTF_run.jl, in the section *Stochastic runs evaluation*. You can modify the examples shown. You will probably need to have a quick look at the functions in src/OptTF_plots.jl to call those functions correctly, get the file system directories right, find the output, etc. 
 
+# Brief summary of script (.jl) files
+
+In the src/ directory are several .jl script files. All code is run via the examples in the OptTF_run.jl file.
+## OptTF_settings.jl
+
+Most of the settings and parameters are controlled in this file. Each value is stored as a variable in the Settings structure. See the [Parameters.jl][https://mauro3.github.io/Parameters.jl/stable/] module documentation for details on how the Settings structure is created and used. Within the code here, the examples in OptTF_run.jl show usage.
+
+## OptTF.jl
+
+This is the main file. Most of the code is called from the fit_diffeq function, so the easiest way to read the code is to follow the steps in that function. After some setup, the main loop `for i in 1:length(beta_a)` does a sequences of fits, each step fitting an increasing time period. The reason for fitting by a sequence of time periods is that fits usually fail if trying the full time period in one go. For more details on sequential fitting, see the Methods section in this [arXiv reprint][https://arxiv.org/abs/2204.07833], which provides a summary for a similar context.
+
+## OptTF_param.jl
+
+The Methods section of the associated manuscript for this work describes the way in which parameters are bound within particular limits. This file includes the code to achieve that bounding. See OptTF.jl for calls to the functions in this file.
+
+## OptTF_data.jl
+
+This code generates the circadian pattern and the external on/off light signal. Most of the information is contained in the struct Circadian, which is initialized in the OptTF.jl and then passed around as a parameter, G.
+
+## OptTF_plots.jl
+
+Most of the plotting routines called either during code execution to show progress of a run (in the callback function in OptTF.jl) or in the OptTF_run.jl calls that do the work of running the program and summarizing the output.
+
+## OptTF_bayes.jl
+
+Not used for this article. Provides way to study quality of fits and to test for overfitting. See his [arXiv reprint][https://arxiv.org/abs/2204.07833], which used the bayes code here on a different problem.
+
+## OptTF_run.jl
+
+All of the calls to the code in other files to execute runs, refine fits, manipulate output, and create plots.
