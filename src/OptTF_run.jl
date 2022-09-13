@@ -14,8 +14,12 @@ p_opt1,L,A  = fit_diffeq(S; noise=0.5, noise_wait=1000.0, hill_k_init=2.0);
 tf, re, state, _ = generate_tf_node(S);			# must regenerate tf function
 L = loss_args(L; tf=tf, re=re, state=state);
 L_all = (S.train_frac < 1) ? make_loss_args_all(L, A) : L;
+loss1, _, _, GG1, pred1 = loss(p_opt1,S,L);		# use if p_opt2 fails or p_opt1 of interest
+use_2 = false;	# set to false if p_opt2 fails, true if p_opt2 is good
 
 p_opt2 = refine_fit_bfgs(p_opt1,S,L)			# or p_opt2=p_opt1;
+loss2, _, _, GG2, pred2 = loss(p_opt2,S,L);
+use_2 = true;	# set to false if p_opt2 fails, true if p_opt2 is good
 
 # run bfgs a second time if desired
 # p_opt2 = refine_fit_bfgs(p_opt2,S,L)
@@ -28,12 +32,6 @@ p_opt2 = refine_fit_bfgs(p_opt1,S,L)			# or p_opt2=p_opt1;
 # see definition of refine_fit() for other options to refine fit
 # alternatively, may be options for ode solver and tolerances that would allow bfgs
 
-loss1, _, _, GG1, pred1 = loss(p_opt1,S,L);		# use if p_opt2 fails or p_opt1 of interest
-loss2, _, _, GG2, pred2 = loss(p_opt2,S,L);
-
-use_2 = false;	# set to false if p_opt2 fails, true if p_opt2 is good
-use_2 = true;	# set to false if p_opt2 fails, true if p_opt2 is good
-
 p, loss_v, GG, pred = use_2 ? (p_opt2, loss2, GG2, pred2) : (p_opt1, loss1, GG1, pred1);
 
 # save results
@@ -44,7 +42,7 @@ dt_test = load_data(S.out_file);
 keys(dt_test)
 
 # If OK, then move out_file to standard location and naming for runs
-f_name = "sde-4_1_t4.jld2"
+f_name = "sde-4_6_t4.jld2"
 mv(S.out_file, S.proj_dir * "/output_node/" * f_name)
 # then delete temporary files
 tmp_list = readdir(S.proj_dir * "/tmp/",join=true);
