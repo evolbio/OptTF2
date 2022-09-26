@@ -446,6 +446,8 @@ function fit_diffeq(S; noise = 0.1, new_rseed = S.generate_rand_seed,
 				
 		result = solve(opt_prob(p,S,L), ADAM(S.adm_learn), callback = callback,
 						maxiters=S.max_it)
+# 		result = solve(opt_prob(p,S,L), NelderMead(), callback = callback,
+# 						maxiters=S.max_it)
 		
 		iter = @sprintf "_%02d" i
 		tmp_file = S.proj_dir * "/tmp/" * S.start_time * iter * ".jld2"

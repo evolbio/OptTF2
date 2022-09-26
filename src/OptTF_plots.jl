@@ -182,7 +182,7 @@ remove_nan!(v) = filter!(x -> !isnan(x), v)
 # save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
 function save_summary_plots(filebase; samples = 100,
 			plot_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/analysis/tmp/",
-			proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/")
+			proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output_node/")
 	println("Making plots for $filebase")
 	dt = Logging.with_logger(Logging.NullLogger()) do
    		load_data(proj_output * filebase * ".jld2");
@@ -211,7 +211,7 @@ function save_summary_plots(filebase; samples = 100,
 	writedlm(plot_dir * filebase * "_dur_data.dlm", duration)
 	
 	
-	# plot mean and sd of deviations for time of entry in to daytime, in hours
+	# plot mean and sd of deviations for time of entry into daytime, in hours
 	times = 1:length(deviation[1,:]);
 	ave = mean.([remove_nan!(deviation[:,i])*24 for i in times]);
 	sd = std.([remove_nan!(deviation[:,i])*24 for i in times]);
@@ -238,7 +238,7 @@ function save_summary_plots(filebase; samples = 100,
 	plot!(cdf_data(remove_nan!(duration[:,30,]*24)), label="30")
 	savefig(plt, plot_dir * filebase * "_dur_cdf.pdf")
 	
-	if (3 <= S.n <= 4)
+	if (!S.use_node && 3 <= S.n <= 4)
 		plot_tf(filebase; save_dir=plot_dir, proj_dir=proj_output)
 end
 	
