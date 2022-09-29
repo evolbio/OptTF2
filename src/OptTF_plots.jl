@@ -457,15 +457,18 @@ function plot_w_range(filebase; file_labels = nothing, samples=1000,
 	new_basefiles = Vector{String}(undef,0)
 	new_labels = file_labels == nothing ? nothing : Vector{String}(undef,0)
 	for i in 1:num_files
-		dt = load_data(in_dir * files[i] * ".jld2")
+		dt = Logging.with_logger(Logging.NullLogger()) do
+			load_data(in_dir * files[i] * ".jld2");
+		end
 		ff = generate_tf_activation_f(dt.S.tf_in_num)
-		predict = OptTF.setup_diffeq_func(dt.S);
+		predict = OptTF.setup_diffeq_func(dt.S)
 		for w in w_val
 			S = dt.S
+			S = Settings(dt.S; diffusion=true, batch=5, solver=ISSEM());
 			L = loss_args(dt.L; f=ff, noise_wait=w, predict=predict)
-			loss_v, _, _, GG, pred = loss(dt.p,S,L);
 			S, L, L_all, G = remake_days_train(dt.p, S, L; days=S.days,
 				train_frac=S.train_frac);
+			loss_v, _, _, GG, pred = loss(dt.p,S,L);
 			base_w = files[i] * @sprintf("_w%04d", w)
 			push!(new_basefiles, base_w)
 			if file_labels != nothing
