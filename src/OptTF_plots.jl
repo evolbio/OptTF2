@@ -344,7 +344,7 @@ end
 
 # file is jld2 file without path
 # plot of only one protein (p_focal) for all four inputs
-function plot_tf_4_onepage(file; display_plot=true, p_focal = 1,
+function plot_tf_4_onepage(file; display_plot=true, p_focal = 1, contour = true,
 			proj_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/")
 	if typeof(findlast(isequal('.'),file)) == Nothing
 		file = file * ".jld2"	# add ext if not present, must be .jld2
@@ -371,6 +371,7 @@ function plot_tf_4_onepage(file; display_plot=true, p_focal = 1,
 	incr = 0.025
 	xx = 0:incr:5
 	yy = 0:incr:5
+	kind! = contour ? contour! : surface!	# alternatively use heatmap!
 	plt = plot(size=(d_num*290,d_num*300),layout=(d_num,d_num), grid=false)
 	for i in d				# rows, p3
 		for j in d			# cols, p4
@@ -378,11 +379,12 @@ function plot_tf_4_onepage(file; display_plot=true, p_focal = 1,
 				[(tf([b^x,b^y,10^i,10^j],re(p_nn),state)[1])[p_focal]
 															for x in xx, y in yy] :
 				[OptTF.calc_f(f,pp,[b^x,b^y,10^i,10^j],S)[p_focal] for x in xx, y in yy]
-			surface!(xx, yy, zz, zrange=(0,1), subplot = j + 1 + i*d_num,
+			kind!(xx, yy, zz, zrange=(0,1), subplot = j + 1 + i*d_num,
 						colorbar=false,
 						xlabel=(i==5) ? "p1" : "", ylabel=(i==5) ? "p2" : "",
 						zlabel=(j==0) ? "p3=$i" : "",
-						title=(i==0) ? "p4=$j" : "", seriescolor=:PuOr_9)
+						title=(i==0) ? "p4=$j" : "", seriescolor=:PuOr_9,
+						fill = (contour ? true : false))
 						# BrBG_6 PRGn_9
 						# see https://docs.juliaplots.org/latest/generated/colorschemes/
 		end
