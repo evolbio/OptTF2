@@ -354,10 +354,17 @@ function plot_tf_4_onepage(file; display_plot=true, p_focal = 1,
 	end
 	S = dt.S
 	@assert S.n == 4 "Can plot only for S.n == 4"
-	f = generate_tf_activation_f(S.tf_in_num)
-	p = S.opt_dummy_u0 ? dt.p[2S.n+1:end] : dt.p
-	pp = OptTF.OptTF_param.linear_sigmoid.(p, S.d, S.k1, S.k2)
-	pp .= (pp .* S.p_mult) .+ S.p_min
+	if S.use_node
+		L = dt.L
+		skip = 4S.n+1 + S.ddim
+		p_nn = @view dt.p[skip:end]
+		tf, re, state, _ = OptTF.generate_tf_node(S)
+	else
+		f = generate_tf_activation_f(S.tf_in_num)
+		p = S.opt_dummy_u0 ? dt.p[2S.n+1:end] : dt.p
+		pp = OptTF.OptTF_param.linear_sigmoid.(p, S.d, S.k1, S.k2)
+		pp .= (pp .* S.p_mult) .+ S.p_min
+	end
 	b = 10.0
 	d = 0:5
 	d_num = length(d)
@@ -367,7 +374,10 @@ function plot_tf_4_onepage(file; display_plot=true, p_focal = 1,
 	plt = plot(size=(d_num*290,d_num*300),layout=(d_num,d_num), grid=false)
 	for i in d				# rows, p3
 		for j in d			# cols, p4
-			zz = [OptTF.calc_f(f,pp,[b^x,b^y,10^i,10^j],S)[p_focal] for x in xx, y in yy]
+			zz = S.use_node ?
+				[(tf([b^x,b^y,10^i,10^j],re(p_nn),state)[1])[p_focal]
+															for x in xx, y in yy] :
+				[OptTF.calc_f(f,pp,[b^x,b^y,10^i,10^j],S)[p_focal] for x in xx, y in yy]
 			surface!(xx, yy, zz, zrange=(0,1), subplot = j + 1 + i*d_num,
 						colorbar=false,
 						xlabel=(i==5) ? "p1" : "", ylabel=(i==5) ? "p2" : "",

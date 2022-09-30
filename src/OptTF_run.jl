@@ -252,6 +252,8 @@ in_dir = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output_node/SDE_tol3
 plt=plot_w_range(["sde-4_1_t4"]; file_labels=[""], samples=1000, in_dir=in_dir,
 				ylim=(-4.4,4.4), show_days=[10,20,30], bottom_trim=70px)
 
+plt=plot_tf_4_onepage("sde-4_1_t4", proj_dir = in_dir, p_focal=1)
+
 ###################
 
 save_summary_plots.(["circad-5-5_1_t6", "circad-6-6_2_t6"]);
