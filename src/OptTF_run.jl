@@ -70,7 +70,7 @@ p_opt2 = refine_fit(p_opt2,S,L)
 using OptTF, DifferentialEquations
 
 proj_output = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
-basefile = proj_output * "output_node/SDE_tol3_3/sde-4_1_t4";
+basefile = proj_output * "output_node/SDE_tol3_3/sde-4_8_t4";
 dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
 S = dt.S;
 ff = generate_tf_activation_f(dt.S.tf_in_num);
@@ -90,7 +90,7 @@ S, L, L_all, G = remake_days_train(dt.p, S, L; days=new_days,
 										train_frac=new_train_frac);
 
 # plots
-plot_stoch(dt.p, S, L, G, L_all; samples=10, display_plot=true)	# increase samples as needed
+plot_stoch(dt.p, S, L, G, L_all; samples=20, display_plot=true)	# increase samples as needed
 
 loss_all, _, _, G_all, pred_all = loss(dt.p,S,L_all);
 plot_callback(loss_all, S, L_all, G_all, pred_all, true; no_display=false)
@@ -252,7 +252,7 @@ in_dir = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output_node/SDE_tol3
 plt=plot_w_range(["sde-4_1_t4"]; file_labels=[""], samples=1000, in_dir=in_dir,
 				ylim=(-4.4,4.4), show_days=[10,20,30], bottom_trim=70px)
 
-plt=plot_tf_4_onepage("sde-4_1_t4", proj_dir = in_dir, p_focal=1)
+plt=plot_tf_4_onepage("sde-4_1_t4", proj_dir = in_dir, steps = 4, p_focal=1)
 
 ###################
 

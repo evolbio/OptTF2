@@ -344,7 +344,9 @@ end
 
 # file is jld2 file without path
 # plot of only one protein (p_focal) for all four inputs
+# steps is number of rows and cols, log vals 0:5, so stepsize is 5/(steps-1)
 function plot_tf_4_onepage(file; display_plot=true, p_focal = 1, contour = true,
+			steps = 6,
 			proj_dir="/Users/steve/sim/zzOtherLang/julia/projects/OptTF/output/")
 	if typeof(findlast(isequal('.'),file)) == Nothing
 		file = file * ".jld2"	# add ext if not present, must be .jld2
@@ -366,7 +368,9 @@ function plot_tf_4_onepage(file; display_plot=true, p_focal = 1, contour = true,
 		pp .= (pp .* S.p_mult) .+ S.p_min
 	end
 	b = 10.0
-	d = 0:5
+	max = steps - 1
+	stepsize = 5/(steps-1)
+	d = 0:max
 	d_num = length(d)
 	incr = 0.025
 	xx = 0:incr:5
@@ -374,20 +378,27 @@ function plot_tf_4_onepage(file; display_plot=true, p_focal = 1, contour = true,
 	kind! = contour ? contour! : surface!	# alternatively use heatmap!
 	plt = plot(size=(d_num*290,d_num*300),layout=(d_num,d_num), grid=false)
 	for i in d				# rows, p3
+		istep = i * stepsize
+		istep_pr = round(istep, digits=2)
 		for j in d			# cols, p4
+			jstep = j * stepsize
+			jstep_pr = round(jstep, digits=2)
 			zz = S.use_node ?
-				[(tf([b^x,b^y,10^i,10^j],re(p_nn),state)[1])[p_focal]
+				[(tf([b^x,b^y,10^istep,10^jstep],re(p_nn),state)[1])[p_focal]
 															for x in xx, y in yy] :
-				[OptTF.calc_f(f,pp,[b^x,b^y,10^i,10^j],S)[p_focal] for x in xx, y in yy]
-			kind!(xx, yy, zz, zrange=(0,1), subplot = j + 1 + i*d_num,
+				[OptTF.calc_f(f,pp,[b^x,b^y,10^istep,10^jstep],S)[p_focal]
+															for x in xx, y in yy]
+			kind!(xx, yy, zz, zrange=(0,1), subplot = j + 1 + (max-i)*d_num,
 						colorbar=false,
-						xlabel=(i==5) ? "p1" : "", ylabel=(i==5) ? "p2" : "",
-						zlabel=(j==0) ? "p3=$i" : "",
-						title=(i==0) ? "p4=$j" : "", seriescolor=:PuOr_9,
+						xlabel=(i==0) ? "p1" : "", ylabel=(i==0 && j!=0) ? "p2" : " ",
+						zlabel=(j==0) ? "p3=$istep_pr" : "",
+						title=(i==max) ? "p4=$jstep_pr" : "", seriescolor=:PuOr_9,
 						fill = (contour ? true : false))
 						# BrBG_6 PRGn_9
 						# see https://docs.juliaplots.org/latest/generated/colorschemes/
 		end
+		annotate!(-0.9, 1.7, Plots.text("p3=$istep_pr", 14, rotation=90, :left),
+				subplot=1 + (max-i)*d_num)
 	end
 
 	if display_plot display(plt) end
