@@ -2,7 +2,7 @@
 
 Source code for manuscript:
 
-Frank, S. A. 2022. Optimization of transcription factor genetic circuits. bioRxiv 2022.07.05.498863, [doi:10.1101/2022.07.05.498863](https://doi.org/10.1101/2022.07.05.498863).
+Frank, S. A. 2022. An enhanced transcription factor repressilator that buffers stochasticity and entrains to an erratic external circadian signal. bioRxiv 2022.XXXX, [doi:10.1101/2022.XXXX](https://doi.org/10.1101/2022.07.05.498863).
 
 by Steven A. Frank, https://stevefrank.org
 
@@ -10,17 +10,23 @@ by Steven A. Frank, https://stevefrank.org
 
 ---
 
-Only on Zenodo at https://doi.org/10.5281/zenodo.6798421, the directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript plus many other sample runs. Zenodo also includes the GitHub code tagged as version zenodo_1.0. 
+Only on Zenodo at https://doi.org/10.5281/zenodo.7178508, the directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript. Zenodo also includes the GitHub code tagged as version tf2_zenodo_1.0. 
 
-[GitHub](https://github.com/evolbio/OptTF) has the source code along with this file but without the output/ and analysis/ directories. Small updates will be posted on GitHub without updating the Zenodo version. In other words, GitHub is the best place for the source code, and Zenodo is the best place for the extra files in the output/ and analysis/ directories.
+[GitHub](https://github.com/evolbio/OptTF2) has the source code along with this file but without the output/ and analysis/ directories. Small updates will be posted on GitHub without updating the Zenodo version. In other words, GitHub is the best place for the source code, and Zenodo is the best place for the extra files in the output/ and analysis/ directories.
 
 # Getting started with the code
+
+## Look at an earlier version first
+
+It might be easier to get started with a prior version that is a bit simpler and has instructions for deterministic runs that finish relatively quickly. The prior version is at https://github.com/evolbio/OptTF. After trying out that code, following the directions in the README file that comes with that code, you can return here. The following instructions do not include the simple deterministic examples found in the prior instructions.
+
+The main difference between the prior code and the code here is that the prior version used a thermodynamic model for transcription factor binding and regulation, whereas this version uses a neural network for the transcription factor input-output function. See the manuscripts associated with the two versions.
 
 ## Julia setup and installing the code
 
 See the tutorials for [getting started with Julia](https://julialang.org/learning/).
 
-My code is based on Julia version 1.8.0-rc1. After the official release of 1.8.0, it may be difficult to find rc-1, but 1.8.0 should work. Current Julia versions are on the site's [download page](https://julialang.org/downloads/#upcoming_release). Follow the install instructions and, to use the command line in a terminal, make sure you have a link from an executable path to the binary as described in the instructions.
+My code is based on Julia version 1.8.2. Current Julia versions are on the site's [download page](https://julialang.org/downloads/#upcoming_release). Follow the install instructions and, to use the command line in a terminal, make sure you have a link from an executable path to the binary as described in the instructions.
 
 Next, download the code from the GitHub repository described above. Change into that directory with the code. Then
 
@@ -40,20 +46,16 @@ In the file src/OptTF_settings.jl, near the top, make sure the function default_
 
 ```julia
 default_ode() = Settings(
-	allow_self = true,
-	gr_type = 1,
-	n = 4,
-	tf_in_num = 4,
-	rtol = 1e-4,
-	atol = 1e-6,
+	n	= 4,
+	rtol = 1e-3,
+	atol = 1e-3,
 	adm_learn = 0.002,
 	days = 6.0,
 	train_frac = 2/3,
-	max_it = 200,
-	opt_dummy_u0 = true,
+	max_it = 150,
 	jump = false,
-	diffusion = false,
-	batch = 1
+	diffusion = true,
+	batch = 12
 )
 ```
 
@@ -68,16 +70,16 @@ Next, following the steps shown at the top of the file src/OptTF_run.jl,
 ```julia
 using OptTF
 S = default_ode();
-p_opt1,L,A = fit_diffeq(S;noise=0.5, noise_wait=1000.0, hill_k_init=2.0);
+p_opt1,L,A = fit_diffeq(S; noise=0.5, noise_wait=2.0, hill_k_init=2.0);
 ```
 
-Copy and paste these lines one at a time. The first line loads the code. The second line loads the parameters and settings. You can type ```S``` and return to see all of the settings from the file src/OptTF_settings.jl. There are a lot of them, which you can change in the file and then rerun the second line. The third line starts an optimization run. Using the above parameters, this should be an optimization of a deterministic system with no stochasticity in the dynamics or random perturbations (or a very rare perturbation from the line ```noise_wait=1000.0```, see the manuscript's description for the parameter *w*).
+Copy and paste these lines one at a time. The first line loads the code. The second line loads the parameters and settings. You can type ```S``` and return to see all of the settings from the file src/OptTF_settings.jl. There are a lot of them, which you can change in the file and then rerun the second line. The third line starts an optimization run. Optimizing the stochastic differentiation equation takes a long time. However, you should see the progress of intermediate steps on the command line and in a graphics window.
 
 Before starting, you should also have a look at the next section on Default directories. You may need to make some changes before having a successful run.
 
-There will be various delays as Julia compiles the code, which can take up to a few minutes for each pause. That is normal and to some people rather irritating. The advantage is that the compiled code runs very fast relative to an interpreted language such as Python. If all goes well, you will within a few minutes get a graphics window that shows the progress of the optimization that attempts to fit the system dynamics to a circadian pattern (see the manuscript). The complete run might take several hours, but you should see some progress within 10-20 minutes or less. For this particular set of parameters, sometimes the optimization goes off in a failing direction and does not converge to the circadian target, but more than half of attempts should work. If you don't like what you see, you can interrupt with ```cntrl-c``` and restart with the above commands. Sometimes repeated interruptions cause a problem with connections to the graphics window, in which case you have to quit Julia and start again.
+There will be various delays as Julia compiles the code, which can take up to a few minutes for each pause. That is normal and to some people rather irritating. The advantage is that the compiled code runs very fast relative to an interpreted language such as Python.
 
-If you run the last line above to completion, you will have the optimized parameters in p_opt1, and some other key aspects of the run in L and A, which are needed for further analysis.
+If you run the last line above to completion, you will have the optimized parameters in p_opt1, and some other key aspects of the run in L and A, which are needed for further analysis. On my computer, a 2022 Apple Studio Ultra M1, finishing a complete single run takes about ten days. However, you can see some progress toward fitting the circadian pattern after several hours to one day.
 
 The various code lines in src/OptTF_run.jl provide many useful things that can be done to refine the fit, make many graphics to analyze the runs, etc. For a full understanding, you will have to read the source code and then experiment with the commands.
 
@@ -94,62 +96,8 @@ If the attempt to write the intermediate results is causing you a problem, you c
 			rm(tmp_file; force=true)
 ```
 
-## More complex examples with stochasticity
-
-The real power of the optimization in this code comes from its ability to optimize stochastic differential equations with automatic differentiation. Stochastic runs are significantly slower. Check your thread count as noted above before running. One can also study entrainment to a random day/night signal, as discussed in the manuscript. Here is an example.
-
-```julia
-default_ode() = Settings(
-	allow_self = true,
-	gr_type = 1,
-	n = 4,
-	tf_in_num = 4,
-	rtol = 1e-4,
-	atol = 1e-6,
-	adm_learn = 0.002,
-	days = 6.0,
-	train_frac = 2/3,
-	max_it = 200,
-	opt_dummy_u0 = true,
-	jump = false,
-	diffusion = true,
-	batch = 12
-)
-```
-
-After editing the src/OptTF_settings.jl, use the lines from the *Test example* section above to start a run, which will initiate a stochastic run via the change to ```diffusion = true```, and increase the number of repeated trajectories in each round of calculating the derivative of the loss via automatic differentiation, in the ``batch = 12`` line. This run will proceed more slowly and can take days to finish. Runs often to not converge to anything close to a good tracking of the target circadian pattern. You can interrupt and try again. If you have succeeded in getting the intermediate results written to a tmp/ directory, you can interrupt if things look good and you don't want to wait any longer. You can then use the intermediate results by using the code below the comment ```# Load tmp file and then save with full jld2 data for plotting``` in the file src/OptTF_run.jl. 
-
-Another thing to try is increasing the extrinsic, random day/night signal that provides an opportunity to entrain to daylight but also provides a challenge because the signal comes and goes randomly. To alter the average waiting time for the signal, change ```noise_wait=1000.0``` to a smaller values, for example, ```noise_wait=2.0``` (in the command to start a run). The example in the manuscript used that value.
-
-For additional things to explore, look at src/OptTF_run.jl.
-
 # Sample output and graphics
 
-To start, get the output and analysis directories from Zenodo at the [link above](#OptTF: Overview). The directory analysis/plots_publish/ contains detailed graphics related to the case study presented in the manuscript. All file names have a base part that describes the run. For example, for the file stoch-4-4_1_w2_w0002_dev_cdf.pdf, the base part is stoch-4-4_1_w2, which means that the run was stochastic and had an average waiting time of w=2 between random switching of the external light entrainment signal. This run was the example used in the manuscript. The part of the name w0002_dev_cdf describes the particular plot for that run, in this case, with w=0002 during the collection of data for the plots, and measuring the cdf of the deviation in entry time into the daylight period.
+To start, get the output and analysis directories from Zenodo at the link above. Then follow along the commands in the various sections of src/OptTF_run.jl.
 
-Other files have names such as stoch-4-4_1_w2_w4_t8_w0002_dev_cdf.pdf. Here, the base is stoch-4-4_1_w2_w4_t8, which means that the original stoch-4-4_1_w2 was further optimized under conditions of w=4 and over a period of 8 days. Such further optimizations always reduced the performance of the original run. The reason for that remains an interesting puzzle, for which the solution may provide some insight into the optimization surface and other key aspects of TF network design.
-
-## Loading a prior run for plotting and further analysis
-
-For the runs in the output/ directory with extension .jld2, you can load the information, which includes all of the settings from the file src/OptTF_settings.jl, the optimized parameters, and some further information needed for additional analysis.
-
-Following the steps in src/OptTF_run.jl, in the section *Load results and complete optimization*, we can analyze a prior run. For example, to load the data from the run analyzed as the test case in the manuscript, start with
-
-```julia
-using OptTF, DifferentialEquations
-proj_dir = "/Users/steve/sim/zzOtherLang/julia/projects/OptTF/";
-basefile = proj_dir * "output/stoch-4-4_1_w2";
-dt = load_data(basefile * ".jld2");				# may be warnings for loaded functions
-S = dt.S;
-ff = generate_tf_activation_f(dt.S.tf_in_num);
-L = loss_args(dt.L; f=ff);
-```
-
-Use an appropriate string for your proj_dir. The variable S contains the many settings that set up the run. For example, S.git_vers will return the git version of the code used for the run. That might be useful if you run into problems because the current code version differs from the version used for a stored run in output/. You could roll the code back to the git version that matched the run, or maybe one past that version in case the run was done before saving the most recent code changes in git. Many other settings are of interest. For example, S.batch will return the batch size for each loss calculation, in this case, 12.
-
-Various combinations of the additional commands in the src/OptTF_run.jl code for this section provide ways to look at the loaded run.
-
-## Detailed plots
-
-Many detailed plots can be made with the code in src/OptTF_run.jl, in the section *Stochastic runs evaluation*. You can modify the examples shown. You will probably need to have a quick look at the functions in src/OptTF_plots.jl to call those functions correctly, get the file system directories right, find the output, etc. 
-
+The README file from prior version at https://github.com/evolbio/OptTF had more extensive examples of how to work with the code. If you have trouble with the current version, you might try the prior version first to get a sense of how things work. Then come back to the newer code, which has similar structure.
