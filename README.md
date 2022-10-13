@@ -1,8 +1,8 @@
-# OptTF2: In progress, readme not yet updated
+# OptTF2: Overview
 
 Source code for manuscript:
 
-Frank, S. A. 2022. An enhanced transcription factor repressilator that buffers stochasticity and entrains to an erratic external circadian signal. bioRxiv 2022.XXXX, [doi:10.1101/2022.XXXX](https://doi.org/10.1101/2022.07.05.498863).
+Frank, S. A. 2022. An enhanced transcription factor repressilator that buffers stochasticity and entrains to an erratic external circadian signal. bioRxiv [2022.10.10.511622](https://doi.org/10.1101/2022.10.10.511622). 
 
 by Steven A. Frank, https://stevefrank.org
 
@@ -10,7 +10,7 @@ by Steven A. Frank, https://stevefrank.org
 
 ---
 
-Only on Zenodo at https://doi.org/10.5281/zenodo.7178508, the directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript. Zenodo also includes the GitHub code tagged as version tf2_zenodo_1.0. 
+Only on Zenodo at https://doi.org/10.5281/zenodo.7178508, the directories output/ and analysis/ contain all parameters, output data, and plots for runs used in the manuscript. Zenodo also includes the GitHub code tagged as version tf2_zenodo_1.0.
 
 [GitHub](https://github.com/evolbio/OptTF2) has the source code along with this file but without the output/ and analysis/ directories. Small updates will be posted on GitHub without updating the Zenodo version. In other words, GitHub is the best place for the source code, and Zenodo is the best place for the extra files in the output/ and analysis/ directories.
 
